@@ -792,6 +792,7 @@ Codebook::GetNumberOfAWVs (AntennaID antennaID, SectorID sectorID) const
     {
       NS_FATAL_ERROR ("Antenna [" << antennaID << "] does not exist");
     }
+  return 0;
 }
 
 void
