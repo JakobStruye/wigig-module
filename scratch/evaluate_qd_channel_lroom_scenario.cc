@@ -12,6 +12,8 @@
 #include "ns3/wifi-module.h"
 #include "common-functions.h"
 #include "ns3/beamforming-trace-helper.h"
+#include "ns3/energy-module.h"
+
 #include <iomanip>
 #include <sstream>
 /**
@@ -64,11 +66,11 @@ using namespace ns3;
 using namespace std;
 
 /**  Application Variables **/
-string applicationType = "bulk";          /* Type of the Tx application */
+string applicationType = "onoff";          /* Type of the Tx application */
 uint64_t totalRx = 0;
 double throughput = 0;
 Ptr<PacketSink> packetSink;
-Ptr<OnOffApplication> onoff;
+Ptr<BurstApplication> onoff;
 Ptr<BulkSendApplication> bulk;
 
 /* Network Nodes */
@@ -80,7 +82,7 @@ Ptr<WifiRemoteStationManager> apRemoteStationManager, staRemoteStationManager;
 NetDeviceContainer staDevices;
 
 /*** Beamforming TXSS Schedulling ***/
-uint16_t biThreshold = 10;                /* BI Threshold to trigger TXSS TXOP. */
+uint16_t biThreshold = 1;                /* BI Threshold to trigger TXSS TXOP. */
 uint16_t biCounter;                       /* Number of beacon intervals that have passed. */
 
 /* Flow monitor */
@@ -96,23 +98,28 @@ bool csv = false;                         /* Enable CSV output. */
 /* Tracing */
 Ptr<QdPropagationEngine> qdPropagationEngine; /* Q-D Propagation Engine. */
 
+
+std::map<Time, uint> pktsPerBurstRcvd;
+std::map<Time, Time> latestPerBurstRcvd;
+
 void
 CalculateThroughput (void)
 {
   double thr = CalculateSingleStreamThroughput (packetSink, totalRx, throughput);
+  thr *= 10;
   if (!csv)
     {
-      string duration = to_string_with_precision<double> (Simulator::Now ().GetSeconds () - 0.1, 1)
-                      + " - " + to_string_with_precision<double> (Simulator::Now ().GetSeconds (), 1);
-      std::cout << std::left << std::setw (12) << duration
-                << std::left << std::setw (12) << thr
-                << std::left << std::setw (12) << qdPropagationEngine->GetCurrentTraceIndex () << std::endl;
+      string duration = to_string_with_precision<double> (Simulator::Now ().GetSeconds () - 0.01, 2)
+                      + " - " + to_string_with_precision<double> (Simulator::Now ().GetSeconds (), 2);
+      std::cout << std::left << std::setw (14) << duration
+                << std::left << std::setw (14) << thr
+                << std::left << std::setw (14) << qdPropagationEngine->GetCurrentTraceIndex () << std::endl;
     }
   else
     {
       std::cout << to_string_with_precision<double> (Simulator::Now ().GetSeconds (), 1) << "," << thr << std::endl;
     }
-  Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
+  Simulator::Schedule (MilliSeconds (10), &CalculateThroughput);
 }
 
 void
@@ -143,11 +150,11 @@ StationAssoicated (Ptr<DmgWifiMac> staWifiMac, Mac48Address address, uint16_t ai
     }
   if (applicationType == "onoff")
     {
-      onoff->StartApplication ();
+//      onoff->StartApplication ();
     }
   else
     {
-      bulk->StartApplication ();
+//      bulk->StartApplication ();
     }
 }
 
@@ -189,13 +196,28 @@ PhyRxEnd (Ptr<const Packet>)
   receivedPackets++;
 }
 
+void
+pktReceived (Ptr<BurstApplication> sender, const Ptr<const Packet> pkt, const Address &)
+{
+  TimestampTag tag;
+  pkt->FindFirstMatchingByteTag(tag);
+  Time t = tag.GetTimestamp();
+  auto it = pktsPerBurstRcvd.find(t);
+  if (it == pktsPerBurstRcvd.end()) {
+        pktsPerBurstRcvd[t] = 0;
+  }
+  pktsPerBurstRcvd[t]++;
+  latestPerBurstRcvd[t] = Simulator::Now();
+
+}
+
 int
 main (int argc, char *argv[])
 {
   bool activateApp = true;                        /* Flag to indicate whether we activate OnOff/Bulk Application. */
-  string socketType = "ns3::TcpSocketFactory";    /* Socket type (TCP/UDP). */
+  string socketType = "ns3::UdpSocketFactory";    /* Socket type (TCP/UDP). */
   uint32_t packetSize = 1448;                     /* Application payload size in bytes. */
-  string dataRate = "300Mbps";                    /* Application data rate. */
+  string dataRate = "1000Mbps";                    /* Application data rate. */
   string tcpVariant = "NewReno";                  /* TCP Variant Type. */
   uint32_t bufferSize = 131072;                   /* TCP Send/Receive Buffer Size. */
   uint32_t maxPackets = 0;                        /* Maximum Number of Packets */
@@ -210,7 +232,7 @@ main (int argc, char *argv[])
   bool verbose = false;                           /* Print logging information. */
   double simulationTime = 20;                     /* Simulation time in seconds. */
   string directory = "";                          /* Path to the directory where to store the results. */
-  bool pcapTracing = false;                       /* Fla to indicate if PCAP tracing is enabled or not. */
+  bool pcapTracing = true;                       /* Fla to indicate if PCAP tracing is enabled or not. */
   string arrayConfig = "28";                      /* Phased antenna array configuration. */
 
   /* Command line argument parser setup. */
@@ -246,6 +268,7 @@ main (int argc, char *argv[])
   ConfigureRtsCtsAndFragmenatation (enableRts, rtsThreshold);
   /* Wifi MAC Queue Parameters */
   ChangeQueueSize (queueSize);
+  Config::SetDefault ("ns3::WifiMacQueue::MaxDelay", TimeValue(MilliSeconds(10)));
 
   /*** Configure TCP Options ***/
   ConfigureTcpOptions (tcpVariant, packetSize, bufferSize);
@@ -266,14 +289,18 @@ main (int argc, char *argv[])
   /**** Setup mmWave Q-D Channel ****/
   Ptr<MultiModelSpectrumChannel> spectrumChannel = CreateObject<MultiModelSpectrumChannel> ();
   qdPropagationEngine = CreateObject<QdPropagationEngine> ();
-  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("WigigFiles/QdChannel/L-ShapedRoom/"));
+//  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("WigigFiles/QdChannel/L-ShapedRoom/"));
+  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Output/Ns3/"));
+//  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/mnt/windows/Users/user/"));
+
+
   Ptr<QdPropagationLossModel> lossModelRaytracing = CreateObject<QdPropagationLossModel> (qdPropagationEngine);
   Ptr<QdPropagationDelayModel> propagationDelayRayTracing = CreateObject<QdPropagationDelayModel> (qdPropagationEngine);
   spectrumChannel->AddSpectrumPropagationLossModel (lossModelRaytracing);
   spectrumChannel->SetPropagationDelayModel (propagationDelayRayTracing);
   if (enableMobility)
     {
-      qdPropagationEngine->SetAttribute ("Interval", TimeValue (MilliSeconds (100)));
+      qdPropagationEngine->SetAttribute ("Interval", TimeValue (MilliSeconds (1)));
     }
 
   /**** Setup physical layer ****/
@@ -286,6 +313,7 @@ main (int argc, char *argv[])
   /* Set the operational channel */
   spectrumWifiPhy.Set ("ChannelNumber", UintegerValue (2));
   /* Set default algorithm for all nodes to be constant rate */
+//  wifi.SetRemoteStationManager ("ns3::CbtraaDmgWifiManager");//, "DataMode", StringValue (phyMode));
   wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (phyMode));
   /* Make four nodes and set them up with the phy and the mac */
   NodeContainer wifiNodes;
@@ -303,11 +331,15 @@ main (int argc, char *argv[])
                    "BE_MaxAmpduSize", StringValue (mpduAggSize),
                    "BE_MaxAmsduSize", StringValue (msduAggSize),
                    "SSSlotsPerABFT", UintegerValue (8), "SSFramesPerSlot", UintegerValue (13),
-                   "BeaconInterval", TimeValue (MicroSeconds (102400)));
+                   "BeaconInterval", TimeValue (MicroSeconds (102400))//,
+                   //"IsResponderTXSS", BooleanValue(false)
+                  );
 
   /* Set Parametric Codebook for the DMG AP */
-  wifi.SetCodebook ("ns3::CodebookParametric",
-                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_AP_" + arrayConfig + "x.txt"));
+//  wifi.SetCodebook ("ns3::CodebookParametric",
+//                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_AP_" + arrayConfig + "x.txt"));
+    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam"));
+
 
   /* Create Wifi Network Devices (WifiNetDevice) */
   NetDeviceContainer apDevice;
@@ -319,8 +351,10 @@ main (int argc, char *argv[])
                    "BE_MaxAmsduSize", StringValue (msduAggSize));
 
   /* Set Parametric Codebook for the DMG STA */
-  wifi.SetCodebook ("ns3::CodebookParametric",
-                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_STA_" + arrayConfig + "x.txt"));
+//  wifi.SetCodebook ("ns3::CodebookParametric",
+//                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_STA_" + arrayConfig + "x.txt"));
+    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam"));
+
 
   staDevices = wifi.Install (spectrumWifiPhy, wifiMac, staWifiNode);
 
@@ -328,6 +362,26 @@ main (int argc, char *argv[])
   MobilityHelper mobility;
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (wifiNodes);
+
+  /* energy source */
+  BasicEnergySourceHelper basicSourceHelper;
+  // configure energy source
+  basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (999999999));
+  basicSourceHelper.Set ("BasicEnergySupplyVoltageV", DoubleValue(1));
+  // install source
+  EnergySourceContainer sources = basicSourceHelper.Install (staWifiNode);
+  /* device energy model */
+  WifiRadioEnergyModelHelper radioEnergyHelper;
+  // configure radio energy model
+  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (3.9));
+  radioEnergyHelper.Set ("RxCurrentA", DoubleValue (4.0));
+  radioEnergyHelper.Set ("CcaBusyCurrentA", DoubleValue (2.6));
+  radioEnergyHelper.Set ("SwitchingCurrentA", DoubleValue (2.6));
+  radioEnergyHelper.Set ("IdleCurrentA", DoubleValue (2.6));
+  //  radioEnergyHelper.Set ("SleepCurrentA", DoubleValue (2.0));
+
+  // install device model
+  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (staDevices, sources);
 
   /* Internet stack*/
   InternetStackHelper stack;
@@ -347,39 +401,42 @@ main (int argc, char *argv[])
     {
       /* Install Simple UDP Server on the DMG AP */
       PacketSinkHelper sinkHelper (socketType, InetSocketAddress (Ipv4Address::GetAny (), 9999));
-      ApplicationContainer sinkApp = sinkHelper.Install (apWifiNode);
+      ApplicationContainer sinkApp = sinkHelper.Install (staWifiNode);
       packetSink = StaticCast<PacketSink> (sinkApp.Get (0));
       sinkApp.Start (Seconds (0.0));
 
       /* Install TCP/UDP Transmitter on the DMG STA */
-      Address dest (InetSocketAddress (apInterface.GetAddress (0), 9999));
+      Address dest (InetSocketAddress (staInterfaces.GetAddress (0), 9999));
       ApplicationContainer srcApp;
       if (applicationType == "onoff")
         {
-          OnOffHelper src (socketType, dest);
+          BurstHelper src (socketType, dest);
           src.SetAttribute ("MaxPackets", UintegerValue (maxPackets));
           src.SetAttribute ("PacketSize", UintegerValue (packetSize));
-          src.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1e6]"));
-          src.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+          src.SetAttribute ("BurstsPerSecond", StringValue ("ns3::ConstantRandomVariable[Constant=100]"));
+//          src.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
           src.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
-          srcApp = src.Install (staWifiNode);
-          onoff = StaticCast<OnOffApplication> (srcApp.Get (0));
+          src.SetAttribute("EnableTimestamp", BooleanValue(true));
+          srcApp = src.Install (apWifiNode);
+          onoff = StaticCast<BurstApplication> (srcApp.Get (0));
+          packetSink->TraceConnectWithoutContext ("Rx", MakeBoundCallback(&pktReceived, onoff));
+
         }
       else if (applicationType == "bulk")
         {
           BulkSendHelper src (socketType, dest);
-          srcApp= src.Install (staWifiNode);
+          srcApp= src.Install (apWifiNode);
           bulk = StaticCast<BulkSendApplication> (srcApp.Get (0));
         }
-      srcApp.Start (Seconds (simulationTime + 1));
-      srcApp.Stop (Seconds (simulationTime));
+      srcApp.Start (Seconds (0.1));
+      srcApp.Stop (Seconds (simulationTime+0.1));
     }
 
   /* Enable Traces */
   if (pcapTracing)
     {
       spectrumWifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
-      spectrumWifiPhy.SetSnapshotLength (120);
+//      spectrumWifiPhy.SetSnapshotLength (120);
       spectrumWifiPhy.EnablePcap ("Traces/AccessPoint", apDevice, false);
       spectrumWifiPhy.EnablePcap ("Traces/StaNode", staDevices.Get (0), false);
     }
@@ -437,7 +494,13 @@ main (int argc, char *argv[])
 
   Simulator::Stop (Seconds (simulationTime + 0.101));
   Simulator::Run ();
-  Simulator::Destroy ();
+  for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
+  {
+      double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
+      std::cout << "End of simulation (" << Simulator::Now ().GetSeconds ()
+                << "s) Total energy consumed by radio = " << energyConsumed << "J" << std::endl;
+      //        NS_ASSERT (energyConsumed <= 0.1);
+  }
 
   if (!csv)
     {
@@ -458,6 +521,29 @@ main (int argc, char *argv[])
               std::cout << "  Tx Packets: " << bulk->GetTotalTxPackets () << std::endl;
               std::cout << "  Tx Bytes:   " << bulk->GetTotalTxBytes () << std::endl;
             }
+            std::ofstream myFile;
+            myFile.open (directory + "delays.out");
+            uint64_t good = 0;
+            uint64_t bad = 0;
+            std::vector<double> usDelays;
+            for (auto it = pktsPerBurstRcvd.begin(); it != pktsPerBurstRcvd.end(); it++) {
+              if (Seconds(simulationTime) - it->first < Seconds(0.1)) {
+                  //ignore
+                  continue;
+              } else if (it->second < onoff->GetPktsPerBurst()) {
+                  bad += 1;
+              } else {
+                  good += 1;
+                  usDelays.push_back((latestPerBurstRcvd[it->first] - it->first).GetMicroSeconds());
+              }
+
+            }
+            std::sort(usDelays.begin(), usDelays.end());
+            for (double v: usDelays) {
+              myFile << v << std::endl;
+            }
+            myFile << good << " " << bad << std::endl;
+            myFile.close();
         }
 
       std::cout << "  Rx Packets: " << packetSink->GetTotalReceivedPackets () << std::endl;
@@ -474,6 +560,7 @@ main (int argc, char *argv[])
       std::cout << "  Number of Rx Packets:         " << receivedPackets << std::endl;
       std::cout << "  Number of Rx Dropped Packets: " << droppedPackets << std::endl;
     }
+  Simulator::Destroy ();
 
   return 0;
 }

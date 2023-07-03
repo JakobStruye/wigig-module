@@ -18,4 +18,6 @@ waf
 
 .idea/
 .lock-waf_linux_build
-
+Traces/
+output/
+.clang-format

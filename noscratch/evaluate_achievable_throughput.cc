@@ -105,7 +105,7 @@ main (int argc, char *argv[])
   WifiPhyStandard wifiStandard = WIFI_PHY_STANDARD_80211ad;
   string wifiModePrefix;
   uint modes = 1;          /* The number of PHY modes we have. */
-  uint maxMcs = 12;        /* The maximum MCS index. */
+  uint maxMcs = 24;        /* The maximum MCS index. */
   if (standard == "ad")
     {
       wifiStandard = WIFI_PHY_STANDARD_80211ad;
