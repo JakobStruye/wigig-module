@@ -3539,7 +3539,7 @@ DmgWifiMac::FindBestTxCombinations (uint8_t nBestCombinations, uint16_t rxCombin
           if (endOfList)
             endOfFinalList = true;
 
-          double maxMinSnr;
+          double maxMinSnr= 0;
           bool firstMax = true;
           uint8_t bestTxRxPairIdx = 0; // TO-DO (Check with NINA)
           uint8_t indexPairs = 0;

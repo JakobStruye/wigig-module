@@ -377,6 +377,7 @@ public:
    * \param nodeName the name of node on which a wifi device must be created
    * \returns a device container which contains all the devices created by this method.
    */
+   using WifiHelper::Install;
   NetDeviceContainer Install (const SpectrumDmgWifiPhyHelper &phy,
                               const DmgWifiMacHelper &mac, std::string nodeName, bool installCodebook = true) const;
 
