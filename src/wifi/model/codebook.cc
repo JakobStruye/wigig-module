@@ -1539,4 +1539,16 @@ Codebook::GetRxSectorsList (void)
   return m_rxBeamformingSectors;
 }
 
+Antenna2SectorList
+Codebook::GetTxSectorsList (void)
+{
+  return m_txBeamformingSectors;
+}
+
+void
+Codebook::DisableTx() {
+  m_txBeamformingSectors[1].erase(m_txBeamformingSectors[1].begin()+1, m_txBeamformingSectors[1].end());
+  m_totalTxSectors = 1;
+}
+
 }

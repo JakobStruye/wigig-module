@@ -135,6 +135,13 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 }
 
 void
+SLSCompletedSta (Ptr<DmgStaWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
+{
+    wifiMac->hijackTx(apWifiMac->GetAddress());
+    SLSCompleted(wifiMac, attributes);
+}
+
+void
 MacRxOk (Ptr<OutputStreamWrapper> stream, WifiMacType, Mac48Address, double snrValue)
 {
   *stream->GetStream () << Simulator::Now ().GetNanoSeconds () << "," << snrValue << std::endl;
@@ -166,7 +173,9 @@ DataTransmissionIntervalStarted (Ptr<DmgApWifiMac> apWifiMac, Ptr<DmgStaWifiMac>
       biCounter++;
       if (biCounter == biThreshold)
         {
-          staWifiMac->Perform_TXSS_TXOP (address);
+          Ptr<Codebook> cb = staWifiMac->GetCodebook();
+          cb->DisableTx();
+          apWifiMac->Perform_TXSS_TXOP (staWifiMac->GetAddress());
           biCounter = 0;
         }
     }
@@ -313,8 +322,8 @@ main (int argc, char *argv[])
   /* Set the operational channel */
   spectrumWifiPhy.Set ("ChannelNumber", UintegerValue (2));
   /* Set default algorithm for all nodes to be constant rate */
-//  wifi.SetRemoteStationManager ("ns3::CbtraaDmgWifiManager");//, "DataMode", StringValue (phyMode));
-  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (phyMode));
+  wifi.SetRemoteStationManager ("ns3::CbtraaDmgWifiManager");//, "DataMode", StringValue (phyMode));
+//  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (phyMode));
   /* Make four nodes and set them up with the phy and the mac */
   NodeContainer wifiNodes;
   wifiNodes.Create (2);
@@ -466,7 +475,7 @@ main (int argc, char *argv[])
   /* DMG STA Straces */
   slsTracerHelper->ConnectTrace (staWifiMac);
   staWifiMac->TraceConnectWithoutContext ("Assoc", MakeBoundCallback (&StationAssoicated, staWifiMac));
-  staWifiMac->TraceConnectWithoutContext ("SLSCompleted", MakeBoundCallback (&SLSCompleted, staWifiMac));
+  staWifiMac->TraceConnectWithoutContext ("SLSCompleted", MakeBoundCallback (&SLSCompletedSta, staWifiMac));
   staWifiPhy->TraceConnectWithoutContext ("PhyTxEnd", MakeCallback (&PhyTxEnd));
   staRemoteStationManager->TraceConnectWithoutContext ("MacTxDataFailed", MakeCallback (&MacTxDataFailed));
 

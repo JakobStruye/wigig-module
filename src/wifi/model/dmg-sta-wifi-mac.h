@@ -232,6 +232,8 @@ public:
    */
   virtual void Perform_TXSS_TXOP (Mac48Address peerAddress);
 
+  void hijackTx(Mac48Address addr);
+
 protected:
   friend class MultiBandNetDevice;
 

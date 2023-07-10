@@ -285,6 +285,9 @@ public:
    */
   SectorID GetSectorIdMimoBrpTxss (AntennaID antenna, SectorID sector);
 
+  void DisableTx();
+
+
 protected:
   friend class DmgWifiHelper;
   friend class DmgWifiMac;
@@ -670,6 +673,8 @@ protected:
    * \return the list of general receive sectors
    */
   Antenna2SectorList GetRxSectorsList (void);
+  Antenna2SectorList GetTxSectorsList (void);
+
   //// NINA ////
 
 private:

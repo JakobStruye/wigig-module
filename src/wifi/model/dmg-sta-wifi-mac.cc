@@ -297,6 +297,13 @@ DmgStaWifiMac::Perform_TXSS_TXOP (Mac48Address peerAddress)
 }
 
 void
+DmgStaWifiMac::hijackTx(Mac48Address addr) {
+    UpdateBestTxAntennaConfiguration (addr, std::make_pair (1, m_codebook->GetTxSectorsList()[1].front()),
+                                     std::get<2> (m_bestAntennaConfig.find (addr)->second));
+
+}
+
+void
 DmgStaWifiMac::SetActiveProbing (bool enable)
 {
   NS_LOG_FUNCTION (this << enable);
