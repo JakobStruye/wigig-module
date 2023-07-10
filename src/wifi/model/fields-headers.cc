@@ -519,7 +519,7 @@ void
 DMG_SSW_FBCK_Field::IsPartOfISS (bool value)
 {
   NS_LOG_FUNCTION (this << value);
-  m_iss = value;
+//  m_iss = value;
 }
 
 uint16_t
