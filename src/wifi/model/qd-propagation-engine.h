@@ -123,6 +123,9 @@ public:
                                    uint16_t &numAPs, NodeContainer &apWifiNodes,
                                    NodeContainer &staWifiNodes, std::vector<NodeContainer> &staNodesGroups);
 
+  void ForceRecalc();
+
+
 protected:
   virtual void DoDispose ();
 
@@ -243,6 +246,8 @@ private:
 
   std::map<uint32_t, uint32_t> nodeId2QdId; //!< Structure to map node ID to Q-D Channel ID.
   bool m_useCustomIDs;                      //!< Flag to indicate whether we use custom list to map ns-3 nodes IDs to Q-D Software IDs.
+
+  mutable bool doRecalc = false;
 
 };
 

@@ -158,6 +158,8 @@ public:
    * \returns The vector difference of \pname{a} and \pname{b}.
    */
   friend Vector3D operator - (const Vector3D &a, const Vector3D &b);
+
+  friend Vector3D operator / (const Vector3D &a, const double &b);
 };
 
 /**

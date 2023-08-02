@@ -18,6 +18,9 @@
 #include "ns3/traced-value.h"
 #include "mgt-headers.h"
 
+#include "codebook-parametric.h"
+
+
 namespace ns3  {
 
 class UniformRandomVariable;
@@ -232,7 +235,7 @@ public:
    */
   virtual void Perform_TXSS_TXOP (Mac48Address peerAddress);
 
-  void hijackTx(Mac48Address addr);
+  void hijackTx(Mac48Address addr, WeightsVector& wv);
 
 protected:
   friend class MultiBandNetDevice;

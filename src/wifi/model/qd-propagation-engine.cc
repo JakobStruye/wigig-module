@@ -115,6 +115,10 @@ QdPropagationEngine::SetStartIndex (const uint32_t startIndex)
   m_currentIndex = startIndex;
 }
 
+void QdPropagationEngine::ForceRecalc() {
+  doRecalc = true;
+}
+
 uint16_t
 QdPropagationEngine::GetCurrentTraceIndex (void) const
 {
@@ -523,14 +527,18 @@ void
 QdPropagationEngine::HandleMobility (void) const
 {
   NS_LOG_FUNCTION (this);
-  if (m_interval.IsStrictlyPositive ())
+  if (m_interval.IsStrictlyPositive () || doRecalc)
     {
       uint32_t traceIndex = m_startIndex + (Simulator::Now ()/m_interval).GetHigh ();
       /* We keep using the channel corresponding to the last entry in the Q-D file */
-      if ((traceIndex < m_numTraces) && (traceIndex != m_currentIndex))
+      if (((traceIndex < m_numTraces) && (traceIndex != m_currentIndex)) || doRecalc)
         {
           m_currentIndex = traceIndex;
           m_channelGainMatrix.clear ();
+          if (doRecalc) {
+              m_currentIndex = std::min(m_numTraces-1, traceIndex);
+          }
+          doRecalc = false;
         }
     }
 }

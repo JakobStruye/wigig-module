@@ -13,6 +13,7 @@
 #include "common-functions.h"
 #include "ns3/beamforming-trace-helper.h"
 #include "ns3/energy-module.h"
+#include "ns3/covrage.h"
 
 #include <iomanip>
 #include <sstream>
@@ -97,7 +98,7 @@ bool csv = false;                         /* Enable CSV output. */
 
 /* Tracing */
 Ptr<QdPropagationEngine> qdPropagationEngine; /* Q-D Propagation Engine. */
-
+CoVRage* covrage;
 
 std::map<Time, uint> pktsPerBurstRcvd;
 std::map<Time, Time> latestPerBurstRcvd;
@@ -106,10 +107,10 @@ void
 CalculateThroughput (void)
 {
   double thr = CalculateSingleStreamThroughput (packetSink, totalRx, throughput);
-  thr *= 10;
+//  thr *= 10;
   if (!csv)
     {
-      string duration = to_string_with_precision<double> (Simulator::Now ().GetSeconds () - 0.01, 2)
+      string duration = to_string_with_precision<double> (Simulator::Now ().GetSeconds () - 0.1, 2)
                       + " - " + to_string_with_precision<double> (Simulator::Now ().GetSeconds (), 2);
       std::cout << std::left << std::setw (14) << duration
                 << std::left << std::setw (14) << thr
@@ -119,7 +120,7 @@ CalculateThroughput (void)
     {
       std::cout << to_string_with_precision<double> (Simulator::Now ().GetSeconds (), 1) << "," << thr << std::endl;
     }
-  Simulator::Schedule (MilliSeconds (10), &CalculateThroughput);
+  Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 }
 
 void
@@ -137,7 +138,9 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 void
 SLSCompletedSta (Ptr<DmgStaWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 {
-    wifiMac->hijackTx(apWifiMac->GetAddress());
+    WeightsVector wv = covrage->GetWeights();
+    wifiMac->hijackTx(apWifiMac->GetAddress(), wv);
+    qdPropagationEngine->ForceRecalc();
     SLSCompleted(wifiMac, attributes);
 }
 
@@ -300,17 +303,21 @@ main (int argc, char *argv[])
   qdPropagationEngine = CreateObject<QdPropagationEngine> ();
 //  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("WigigFiles/QdChannel/L-ShapedRoom/"));
   qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Output/Ns3/"));
-//  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/mnt/windows/Users/user/"));
+  //  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/mnt/windows/Users/user/"));
 
 
   Ptr<QdPropagationLossModel> lossModelRaytracing = CreateObject<QdPropagationLossModel> (qdPropagationEngine);
   Ptr<QdPropagationDelayModel> propagationDelayRayTracing = CreateObject<QdPropagationDelayModel> (qdPropagationEngine);
   spectrumChannel->AddSpectrumPropagationLossModel (lossModelRaytracing);
   spectrumChannel->SetPropagationDelayModel (propagationDelayRayTracing);
+
+  Time interval = MilliSeconds(1);
   if (enableMobility)
     {
-      qdPropagationEngine->SetAttribute ("Interval", TimeValue (MilliSeconds (1)));
+      qdPropagationEngine->SetAttribute ("Interval", TimeValue (interval));
     }
+
+   covrage = new CoVRage("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Input/", interval);
 
   /**** Setup physical layer ****/
   SpectrumDmgWifiPhyHelper spectrumWifiPhy = SpectrumDmgWifiPhyHelper::Default ();
@@ -347,7 +354,7 @@ main (int argc, char *argv[])
   /* Set Parametric Codebook for the DMG AP */
 //  wifi.SetCodebook ("ns3::CodebookParametric",
 //                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_AP_" + arrayConfig + "x.txt"));
-    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam"));
+    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParamSmall"));
 
 
   /* Create Wifi Network Devices (WifiNetDevice) */
@@ -362,7 +369,7 @@ main (int argc, char *argv[])
   /* Set Parametric Codebook for the DMG STA */
 //  wifi.SetCodebook ("ns3::CodebookParametric",
 //                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_STA_" + arrayConfig + "x.txt"));
-    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam"));
+    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParamBig"));
 
 
   staDevices = wifi.Install (spectrumWifiPhy, wifiMac, staWifiNode);

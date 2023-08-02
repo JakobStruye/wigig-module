@@ -297,9 +297,24 @@ DmgStaWifiMac::Perform_TXSS_TXOP (Mac48Address peerAddress)
 }
 
 void
-DmgStaWifiMac::hijackTx(Mac48Address addr) {
+DmgStaWifiMac::hijackTx(Mac48Address addr, WeightsVector& wv) {
     UpdateBestTxAntennaConfiguration (addr, std::make_pair (1, m_codebook->GetTxSectorsList()[1].front()),
                                      std::get<2> (m_bestAntennaConfig.find (addr)->second));
+    Ptr<CodebookParametric> cb = DynamicCast<CodebookParametric>(m_codebook);
+//    WeightsVector wv2 = {std::polar(1.f, -3.1416f), std::polar(1.f, -0.5787f), std::polar(1.f,  0.8640f), std::polar(1.f,  3.1416f),
+//                        std::polar(1.f,  0.1427f), std::polar(1.f,  1.0501f), std::polar(1.f, -1.5960f), std::polar(1.f, -1.7800f),
+//                        std::polar(1.f, -0.2951f), std::polar(1.f,  2.1419f), std::polar(1.f,  3.1416f), std::polar(1.f,  3.1416f),
+//                        std::polar(1.f, -1.8259f), std::polar(1.f, -3.1416f), std::polar(1.f, -3.1416f), std::polar(1.f, -1.2191f)};
+//    WeightsVector wv2 = {std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f),
+//        std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f),
+//        std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f),
+//        std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f), std::polar(1.f, 0.f) };
+//    WeightsVector  wv2;
+//    for (int i = 0; i < 4096; i++) {
+//      wv2.push_back(std::polar(1.f, 0.f));
+//    }
+
+    cb->UpdateSectorWeights(1, m_codebook->GetTxSectorsList()[1].front(), wv);
 
 }
 
