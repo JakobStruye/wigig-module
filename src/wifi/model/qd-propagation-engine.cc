@@ -118,6 +118,10 @@ QdPropagationEngine::SetStartIndex (const uint32_t startIndex)
 void QdPropagationEngine::ForceRecalc() {
   doRecalc = true;
 }
+void QdPropagationEngine::SetOutfile(std::ofstream* outfile) {
+  this->outfile = outfile;
+
+}
 
 uint16_t
 QdPropagationEngine::GetCurrentTraceIndex (void) const
@@ -534,6 +538,7 @@ QdPropagationEngine::HandleMobility (void) const
       if (((traceIndex < m_numTraces) && (traceIndex != m_currentIndex)) || doRecalc)
         {
           m_currentIndex = traceIndex;
+          (*outfile) << m_currentIndex << " ";
           m_channelGainMatrix.clear ();
           if (doRecalc) {
               m_currentIndex = std::min(m_numTraces-1, traceIndex);

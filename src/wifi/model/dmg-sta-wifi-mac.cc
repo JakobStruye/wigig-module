@@ -300,6 +300,8 @@ void
 DmgStaWifiMac::hijackTx(Mac48Address addr, WeightsVector& wv) {
     UpdateBestTxAntennaConfiguration (addr, std::make_pair (1, m_codebook->GetTxSectorsList()[1].front()),
                                      std::get<2> (m_bestAntennaConfig.find (addr)->second));
+    UpdateBestRxAntennaConfiguration(addr, std::make_pair (1, m_codebook->GetRxSectorsList()[1].front()),
+                                     std::get<2> (m_bestAntennaConfig.find (addr)->second));
     Ptr<CodebookParametric> cb = DynamicCast<CodebookParametric>(m_codebook);
 //    WeightsVector wv2 = {std::polar(1.f, -3.1416f), std::polar(1.f, -0.5787f), std::polar(1.f,  0.8640f), std::polar(1.f,  3.1416f),
 //                        std::polar(1.f,  0.1427f), std::polar(1.f,  1.0501f), std::polar(1.f, -1.5960f), std::polar(1.f, -1.7800f),
@@ -315,7 +317,7 @@ DmgStaWifiMac::hijackTx(Mac48Address addr, WeightsVector& wv) {
 //    }
 
     cb->UpdateSectorWeights(1, m_codebook->GetTxSectorsList()[1].front(), wv);
-
+    cb->UpdateSectorWeights(1, m_codebook->GetRxSectorsList()[1].front(), wv);
 }
 
 void

@@ -43,6 +43,7 @@
 #include <complex>
 #include <map>
 #include <tuple>
+#include <fstream>
 
 #include "codebook-parametric.h"
 
@@ -124,6 +125,7 @@ public:
                                    NodeContainer &staWifiNodes, std::vector<NodeContainer> &staNodesGroups);
 
   void ForceRecalc();
+  void SetOutfile(std::ofstream* outfile);
 
 
 protected:
@@ -248,6 +250,7 @@ private:
   bool m_useCustomIDs;                      //!< Flag to indicate whether we use custom list to map ns-3 nodes IDs to Q-D Software IDs.
 
   mutable bool doRecalc = false;
+  std::ofstream* outfile;
 
 };
 

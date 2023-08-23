@@ -229,7 +229,7 @@ main (int argc, char *argv[])
   bool activateApp = true;                        /* Flag to indicate whether we activate OnOff/Bulk Application. */
   string socketType = "ns3::UdpSocketFactory";    /* Socket type (TCP/UDP). */
   uint32_t packetSize = 1448;                     /* Application payload size in bytes. */
-  string dataRate = "1000Mbps";                    /* Application data rate. */
+  string dataRate = "3000Mbps";                    /* Application data rate. */
   string tcpVariant = "NewReno";                  /* TCP Variant Type. */
   uint32_t bufferSize = 131072;                   /* TCP Send/Receive Buffer Size. */
   uint32_t maxPackets = 0;                        /* Maximum Number of Packets */
@@ -242,9 +242,9 @@ main (int argc, char *argv[])
   uint16_t startDistance = 0;                     /* Starting distance in the Trace-File. */
   bool enableMobility = true;                     /* Enable mobility. */
   bool verbose = false;                           /* Print logging information. */
-  double simulationTime = 20;                     /* Simulation time in seconds. */
+  double simulationTime = 19;                     /* Simulation time in seconds. */
   string directory = "";                          /* Path to the directory where to store the results. */
-  bool pcapTracing = true;                       /* Fla to indicate if PCAP tracing is enabled or not. */
+  bool pcapTracing = false;                       /* Fla to indicate if PCAP tracing is enabled or not. */
   string arrayConfig = "28";                      /* Phased antenna array configuration. */
 
   /* Command line argument parser setup. */
@@ -318,6 +318,10 @@ main (int argc, char *argv[])
     }
 
    covrage = new CoVRage("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Input/", interval);
+
+   std::ofstream outfile("CoVRage.txt");
+   covrage->SetOutfile(&outfile);
+   qdPropagationEngine->SetOutfile(&outfile);
 
   /**** Setup physical layer ****/
   SpectrumDmgWifiPhyHelper spectrumWifiPhy = SpectrumDmgWifiPhyHelper::Default ();
@@ -577,6 +581,7 @@ main (int argc, char *argv[])
       std::cout << "  Number of Rx Dropped Packets: " << droppedPackets << std::endl;
     }
   Simulator::Destroy ();
+  outfile.close();
 
   return 0;
 }

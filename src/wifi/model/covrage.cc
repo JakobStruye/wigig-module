@@ -8,9 +8,14 @@
 
 namespace ns3 {
 
-    Euler::Euler() : yaw(0), pitch(0), roll(0) {}
-    Euler::Euler(double az, double el) : yaw(az), pitch(el), roll(0) {}
-    Euler::Euler(double yaw, double pitch, double roll) : yaw(yaw), pitch(pitch), roll(roll) {}
+    Euler::Euler() : yaw(0), roll(0), pitch(0) {}
+    Euler::Euler(double az, double el) : yaw(az), roll(0), pitch(el) {}
+    Euler::Euler(double yaw, double roll, double pitch) : yaw(yaw), roll(roll), pitch(pitch) {}
+
+    std::ostream& operator<<(std::ostream& os, const Euler& euler) {
+        os << euler.yaw <<"," << euler.roll << "," << euler.pitch;
+        return os;
+    }
 
     UV::UV(double u, double v) : u(u), v(v) {}
 
@@ -25,6 +30,15 @@ namespace ns3 {
 
     bool UV::isGood() const {
         return 1 - std::pow(u, 2) - std::pow(v, 2) >= 0.0;
+    }
+
+    bool UV::isNearEdge() const {
+        return 1 - std::pow(u, 2) - std::pow(v, 2) <= 0.00001;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const UV& uv) {
+        os << uv.u <<"," << uv.v;
+        return os;
     }
 
     Dims::Dims(int width, int height) : width(width), height(height) {}
@@ -45,6 +59,7 @@ namespace ns3 {
         Eigen::Quaterniond from = VecToQuat(fromDir);
         Eigen::Quaterniond to = VecToQuat(toDir);
 //        Eigen::Quaterniond rot = to * from.inverse();
+        std::cout << "FROM " << fromDir << " TO " << toDir << " EUL " << QuatToEuler(VecToQuat(toDir)) << " Q " << VecToQuat(toDir) << " " << EulerToUv(QuatToEuler(VecToQuat(toDir))) <<  std::endl;
 
         bool isHor;
         bool isTight = false;
@@ -54,19 +69,22 @@ namespace ns3 {
         Trajectory t;
         auto &pts = t.allPoints;
         std::vector<Euler> pointsEul;
-        double step = 0.0005;
-        double targetDist = 0.0002;
+        double step = 0.000005;
+        double targetDist = 0.000002;
         double rotLen = 0.0;
 
         double progress = 0.0;
         while (progress < 1) {
             Eigen::Quaterniond newPt = from.slerp(progress, to);
+//            std::cout << "DEBUG " << progress << newPt << std::endl;
+//            std::cout <<"DEBUG " << pointsQ.size() << std::endl;
             pointsEul.push_back(QuatToEuler(newPt));
             pts.push_back(EulerToUv(pointsEul.back()));
-            if (pts.size() > 1) {
+            if (pts.size() > 1 && !pts[pts.size()-1].isNearEdge()&& !pts[pts.size()-2].isNearEdge()) {
                 double dist = pts[pts.size() - 1].dist(pts[pts.size() - 2]);
                 rotLen += dist;
                 step *= (targetDist / dist);
+//                std::cout << "DEBUG DIST " << pts.back().u << "," << pts.back().v << " " << pts.back().isNearEdge() << " "   << targetDist << " " << dist << std::endl;
             }
             progress += step;
         }
@@ -74,6 +92,7 @@ namespace ns3 {
         double pathlen = 0;
         for (size_t i = 1; i < pts.size(); i++) {
             pathlen += pts[i].dist(pts[i - 1]);
+//            std::cout << "DEBUG " << i << " DIST " <<  pts[i].dist(pts[i - 1]) << " VS " << (pointsQ[i-1]->angularDistance(*pointsQ[i])) << std::endl;
         }
 
         UV fromUv = EulerToUv(QuatToEuler(VecToQuat(fromDir)));
@@ -91,7 +110,7 @@ namespace ns3 {
         else
             diag = DIAG;
 
-        double radius = GetWidthUv(dims.width / blocks.width) / 2;
+
         int beamCount;
         if (isTight)
             beamCount = 14;
@@ -104,29 +123,45 @@ namespace ns3 {
         else
             std::exit(1);
 
+
+//        std::cout << pts.size() << "VS" << beamCount << std::endl;
+        bool fewPoints = false;
         while (pts.size() < (size_t) beamCount*2) {
+
+
             //Add points until we have enough in low-mobility cases
             pts.push_back(pts.back());
+
+            fewPoints = true;
         }
+//        std::cout << pts.size() << "VS" << beamCount << std::endl;
         double baseradius = pathlen / (beamCount - 1) / 2;
-        UV *keyPoint = &(pts[0]);
+        if (baseradius < 10e-10) {
+            baseradius = 0;
+        }
         bool hasCircle = false;
+        double runningDist = 0;
+        UV* circlePoint = &(pts[0]);
+//        std::cout << "DEBUG" << " BASERAD " << baseradius << " PATHLEN " << pathlen <<  std::endl;
         for (int i = 0; i < (int) pts.size(); i++) {
-            radius = baseradius;
             UV &curPoint = pts[i];
-            if (i > 0 && keyPoint->dist(curPoint) < radius) {
+            UV &prevPoint = pts[std::max(0, i - 1)];
+            runningDist += curPoint.dist(prevPoint);
+            if (!fewPoints && i > 0 && runningDist < baseradius) {
                 continue;
             }
+//            std::cout << "DEBUG" << " ADDING " << (!hasCircle ? " BEAM " : " MIDPT ") << " AT i " << i << " RUNDIST " << runningDist << std::endl;
 
-            UV &prevPoint = pts[std::max(0, i - 1)];
             if (!hasCircle) {
                 t.beamPoints.push_back(prevPoint);
+                circlePoint = &prevPoint;
             } else {
                 t.midPoints.push_back(prevPoint);
                 t.syncs.push_back(t.syncs.size());
             }
-            keyPoint = &prevPoint;
             hasCircle = !hasCircle;
+            runningDist = curPoint.dist(prevPoint);
+//            std::cout << "DEBUG RUNDIST REVERT " << runningDist << std::endl;
         }
         if (!hasCircle && pts.size() == 1) {
             //Why is this?
@@ -134,8 +169,9 @@ namespace ns3 {
         } else if (!hasCircle && pts.size() > 1) {
             const UV &pointA = pts[pts.size() - 2];
             const UV &pointB = pts[pts.size() - 1];
+
             UV extrap = pointB.extrap(pointA, pointB);
-            while (keyPoint->dist(extrap) < radius) {
+            while (circlePoint->dist(extrap) < baseradius) {
                 extrap = extrap.extrap(pointA, pointB);
             }
             extrap = extrap.extrap(pointB, pointA);
@@ -154,6 +190,7 @@ namespace ns3 {
         std::vector<Euler> midPoints;
         for (auto &p : t.beamPoints) {
             beamPoints.push_back(uvToEuler(p));
+            std::cout << "UVEUL" << p << " " << beamPoints[beamPoints.size()-1] << std::endl;
         }
         for (auto &p : t.midPoints) {
             midPoints.push_back(uvToEuler(p));
@@ -165,6 +202,16 @@ namespace ns3 {
             cplx val = awv.coeff(i,0);
             wv.push_back(std::complex<float>(val));
         }
+        (*outfile) << std::endl << "BEAMPTS" << std::endl;
+        for (auto &p : t.beamPoints) {
+            (*outfile) << p << ",";
+        }
+        (*outfile) << std::endl;
+        (*outfile) << "WEIGHTS" << std::endl;
+        for (cplx c: wv) {
+            (*outfile) << std::abs(c) << "," << std::arg(c) << ",";
+        }
+        (*outfile) << std::endl;
         return wv;
     }
 
@@ -172,11 +219,13 @@ namespace ns3 {
         if (m_poseVecs.empty()) {
             InitializePoseVecs();
         }
+        std::cout << "POSESIZE" << nodeIdx << " " << m_poseVecs[nodeIdx].size() << std::endl;
         if (m_poseVecs[nodeIdx].size() == 1) {
             return m_poseVecs[nodeIdx][0];
         }
 
         int timeIdx = std::floor(time.GetSeconds() / interval.GetSeconds());
+
         return m_poseVecs[nodeIdx][timeIdx];
     }
 
@@ -186,12 +235,20 @@ namespace ns3 {
 
         Euler fromDir = fromPose.second;
         Eigen::Quaterniond fromQuat = EulerToQuat(fromDir);
+
         Vector3D diffVec = toPose.first - fromPose.first;
         Eigen::Vector3d diffVecEigen(diffVec.x, diffVec.y, diffVec.z);
         diffVecEigen.normalize();
-        Eigen::Vector3d finalVec = fromQuat * diffVecEigen;
+        Eigen::Vector3d finalVec = fromQuat.inverse() * diffVecEigen;
+        std::cout <<"FROM DIR" << fromDir << " QUAT " << fromQuat.w() << "," <<fromQuat.x() << "," <<fromQuat.y() << "," <<fromQuat.z() << " RESULT " << finalVec.x() << "," << finalVec.y() << "," <<finalVec.z() << std::endl;
+        std::cout << "FROM DIR" << diffVec << " " << std::endl;
         return Vector3D(finalVec.x(), finalVec.y(), finalVec.z());
     }
+
+    void CoVRage::SetOutfile(std::ofstream* outfile) {
+        this->outfile = outfile;
+    }
+
 
     void CoVRage::InitializePoseVecs () {
         int nodeIdx = 0;
@@ -217,35 +274,44 @@ namespace ns3 {
             std::string val;
             bool isFirst = true;
             Euler firstRot;
+            Vector3D firstPos;
+
             while (true) {
-                std::string line;
+                std::string posLine;
+                std::string rotLine;
                 Pose pose;
-                std::getline(posFile, line);
-                if (posFile.eof()) {
+                std::getline(posFile, posLine);
+                std::getline(rotFile, rotLine);
+                if (posFile.eof() && rotFile.eof()) {
                     break;
                 }
-                std::istringstream stream (line);
-                std::getline(stream, val, ',');
-                pose.first.x = std::stod(val);
-                std::getline(stream, val, ',');
-                pose.first.y = std::stod(val);
-                std::getline(stream, val, ',');
-                pose.first.z = std::stod(val);
+                std::istringstream stream;
+                if (!posFile.eof()) {
+                    stream = std::istringstream(posLine);
+                    std::getline(stream, val, ',');
+                    pose.first.x = std::stod(val);
+                    std::getline(stream, val, ',');
+                    pose.first.y = std::stod(val);
+                    std::getline(stream, val, ',');
+                    pose.first.z = std::stod(val);
+                } else {
+                    pose.first = firstPos;
+                }
 
-                std::getline(rotFile, line);
                 if (!rotFile.eof()) {
-                    stream = std::istringstream (line);
+                    stream = std::istringstream (rotLine);
                     std::getline(stream, val, ',');
-                    pose.second.yaw = std::stod(val);
-                    std::getline(stream, val, ',');
-                    pose.second.pitch = std::stod(val);
+                    pose.second.yaw = std::stod(val);// + M_PI/2.0;
                     std::getline(stream, val, ',');
                     pose.second.roll = std::stod(val);
+                    std::getline(stream, val, ',');
+                    pose.second.pitch = std::stod(val);
                 } else {
                     pose.second = firstRot;
                 }
                 m_poseVecs[nodeIdx].push_back(pose);
                 if (isFirst) {
+                    firstPos = pose.first;
                     firstRot = pose.second;
                     isFirst = false;
                 }
@@ -568,8 +634,8 @@ namespace ns3 {
         int ctr = 0;
         for (int x = 0; x < dims.width; x++) {
             for (int y = 0; y < dims.height; y++) {
-//                ElLoc loc = ElLoc(x - ((dims.width-1)/2),y - ((dims.height-1)/2));
-                ElLoc loc = ElLoc(x,y);
+                ElLoc loc = ElLoc(x - ((dims.width-1)/2),y - ((dims.height-1)/2));
+//                ElLoc loc = ElLoc(x,y);
                 cplx steer(0.0, calcSteervecEl(euler, loc));
                 cplx val = std::pow(M_E, steer);
                 m(ctr) = val;
@@ -585,9 +651,10 @@ namespace ns3 {
     }
 
     VectorCplx CoVRage::configureAwv(Eigen::MatrixXi dist, const std::vector<Euler>& eulers) {
+        std::cout << eulers.size() << "EULSIZE" << std::endl;
         std::vector<VectorCplx> weightssets;
         for (size_t idx = 0; idx < eulers.size(); idx++) {
-            weightssets.push_back(normalize(calcSteervec(eulers[idx], dims)));
+            weightssets.push_back(calcSteervec(eulers[idx], dims));
         }
         VectorCplx awv = VectorCplx(dims.getElCount());
         awv.setZero();
@@ -635,20 +702,25 @@ namespace ns3 {
         return std::sin(0.886 / (elCount * SPACING));
     }
 
-    Eigen::Quaterniond CoVRage::VecToQuat(const Vector3D &vec) const {
-        Vector3D normVec = vec /  vec.GetLength();
+    Eigen::Quaterniond VecToQuat(const Vector3D &vec) {
+//        Vector3D normVec = vec /  vec.GetLength();
+//
+//        double cos_theta = normVec.y;
+//        double theta = std::acos(cos_theta);
+//        double w = std::cos(theta / 2);
+//        double sin_theta_over_2 = std:: sin(theta / 2);
+//        double x = normVec.x * sin_theta_over_2;
+//        double y = normVec.y * sin_theta_over_2;
+//        double z = normVec.z * sin_theta_over_2;
+//        return Eigen::Quaterniond(w,x,y,z);
+        Eigen::Vector3d toVec(vec.x,vec.y,vec.z);
+        Eigen::Vector3d fromVec(1,0,0);
 
-        double cos_theta = normVec.y;
-        double theta = std::acos(cos_theta);
-        double w = std::cos(theta / 2);
-        double sin_theta_over_2 = std:: sin(theta / 2);
-        double x = normVec.x * sin_theta_over_2;
-        double y = normVec.y * sin_theta_over_2;
-        double z = normVec.z * sin_theta_over_2;
-        return Eigen::Quaterniond(w,x,y,z);
+        //        std::cout << "FROMTO" << fromVec << " " <<toVec << std::endl;
+        return Eigen::Quaterniond::FromTwoVectors(fromVec, toVec);
     }
 
-    Eigen::Quaterniond CoVRage::EulerToQuat(const Euler& euler) const {
+    Eigen::Quaterniond EulerToQuat(const Euler& euler) {
         //OK
         double cr = std::cos(euler.roll * 0.5);
         double sr = std::sin(euler.roll * 0.5);
@@ -657,43 +729,108 @@ namespace ns3 {
         double cy = std::cos(euler.yaw * 0.5);
         double sy = std::sin(euler.yaw * 0.5);
 
-        double w = cr * cp * cy + sr * sp * sy;
-        double x = sr * cp * cy - cr * sp * sy;
-        double y = cr * sp * cy + sr * cp * sy;
-        double z = cr * cp * sy - sr * sp * cy;
-        return Eigen::Quaterniond(w,y,x,z);
+        //Pitch axis points left
+        double w =  cy * cr * cp + sy * sr * sp;
+        double x =  cy * sr * cp + sy * cr * sp;
+        double y = -cy * cr * sp + sy * sr * cp;
+        double z = -cy * sr * sp + sy * cr * cp;
+        return Eigen::Quaterniond(w, x, y, z);
     }
 
-    Euler CoVRage::QuatToEuler(const Eigen::Quaterniond& q) const {
-        //OK
+    Euler QuatToEuler(const Eigen::Quaterniond &q) {
+        int i = 1;
+        int j = 0;
+        int k = 2;
+
+        int sign = (i - j) * (j - k) * (k - i) / 2;
+
         Euler eul;
-        // roll (x-axis rotation)
-        double sinr_cosp = 2 * (q.w() * q.y() + q.x() * q.z());
-        double cosr_cosp = 1 - 2 * (q.y() * q.y() + q.x() * q.x());
-        eul.roll = std::atan2(sinr_cosp, cosr_cosp);
+        double eps = 1e-7;
+        int thecase;
 
-        // pitch (y-axis rotation)
-        double sinp = std::sqrt(1 + 2 * (q.w() * q.x() - q.y() * q.z()));
-        double cosp = std::sqrt(1 - 2 * (q.w() * q.x() - q.y() * q.z()));
-        eul.pitch = 2 * std::atan2(sinp, cosp) - M_PI / 2;
+        double a = q.w() - q.x();
+        double b = q.y() + q.z() * sign;
+        double c = q.x() + q.w();
+        double d = q.z() * sign - q.y();
+//        std::cout << "abcd" << a << " " << b << " " << c << " " << d << std::endl;
 
-        // yaw (z-axis rotation)
-        double siny_cosp = 2 * (q.w() * q.z() + q.y() * q.x());
-        double cosy_cosp = 1 - 2 * (q.x() * q.x() + q.z() * q.z());
-        eul.yaw = std::atan2(siny_cosp, cosy_cosp);
+        eul.roll = 2 * std::atan2(std::hypot(c, d), std::hypot(a, b));
+
+        if (std::abs(eul.roll) <= eps)
+            thecase = 1;
+        else if (std::abs(eul.roll - M_PI) <= eps)
+            thecase = 2;
+        else
+            thecase = 0;
+
+
+        double half_sum = std::atan2(b, a);
+        double half_diff = std::atan2(d, c);
+
+        if (thecase == 0) {
+            eul.pitch = half_sum - half_diff;
+            eul.yaw = half_sum + half_diff;
+        } else {
+            eul.yaw = 0;
+            if (thecase == 1)
+                eul.pitch = 2 * half_sum;
+            else
+                eul.pitch = 2 * half_diff * -1;
+        }
+
+        eul.yaw *= sign;
+        eul.roll -= M_PI / 2;
+
+        if (eul.yaw < -M_PI)
+            eul.yaw += 2 * M_PI;
+        else if (eul.yaw > M_PI)
+            eul.yaw -= 2 * M_PI;
+        if (eul.roll < -M_PI)
+            eul.roll += 2 * M_PI;
+        else if (eul.roll > M_PI)
+            eul.roll -= 2 * M_PI;
+        if (eul.pitch < -M_PI)
+            eul.pitch += 2 * M_PI;
+        else if (eul.pitch > M_PI)
+            eul.pitch -= 2 * M_PI;
+
+        eul.pitch *= -1; //Pitch axis points left
+
+        if (thecase != 0) {
+            std::cout << "GIMBAL LOCK" << std::endl;
+        }
         return eul;
+
+        //
+//        //OK
+//        Euler eul;
+//        // roll (x-axis rotation)
+//        double sinr_cosp = 2 * (q.w() * q.x() + q.y() * q.z());
+//        double cosr_cosp = 1 - 2 * (q.x() * q.x() + q.y() * q.y());
+//        eul.roll = std::atan2(sinr_cosp, cosr_cosp);
+//
+//        // pitch (y-axis rotation)
+//        double sinp = std::sqrt(1 + 2 * (q.w() * q.y() - q.x() * q.z()));
+//        double cosp = std::sqrt(1 - 2 * (q.w() * q.y() - q.x() * q.z()));
+//        eul.pitch = 2 * std::atan2(sinp, cosp) - M_PI / 2;
+//
+//        // yaw (z-axis rotation)
+//        double siny_cosp = 2 * (q.w() * q.z() + q.x() * q.y());
+//        double cosy_cosp = 1 - 2 * (q.y() * q.y() + q.z() * q.z());
+//        eul.yaw = std::atan2(siny_cosp, cosy_cosp);
+//        return eul;
     }
 
 
-    UV CoVRage::EulerToUv(const Euler& eul) const {
+    UV EulerToUv(const Euler& eul) {
         return UV(std::cos(eul.pitch)*std::sin(eul.yaw), std::sin(eul.pitch));
     }
 
-    Euler CoVRage::uvToEuler(const UV& uv) {
-        return Euler(std::atan2(uv.u, sqrt(1 - std::pow(uv.u, 2) - std::pow(uv.v, 2))), std::asin(uv.v), 0);
+    Euler uvToEuler(const UV& uv) {
+        return Euler(std::atan2(uv.u, sqrt(1 - std::pow(uv.u, 2) - std::pow(uv.v, 2))),0, std::asin(uv.v));
     }
 
-    VectorCplx CoVRage::fillFrom(const VectorCplx& source, const MatrixXb& selection) {
+    VectorCplx fillFrom(const VectorCplx& source, const MatrixXb& selection) {
         int resultSize = selection.count();
         VectorCplx result(resultSize);
         int resultIdx = 0;
@@ -709,7 +846,7 @@ namespace ns3 {
         return result;
     }
 
-    void CoVRage::multiplyWhere(VectorCplx& v, const MatrixXb& selection, cplx multiplier) {
+    void multiplyWhere(VectorCplx& v, const MatrixXb& selection, cplx multiplier) {
         for (int xSource = 0; xSource < selection.cols(); xSource++) {
             for (int ySource = 0; ySource < selection.rows(); ySource++) {
                 if (selection(xSource,ySource) == true) {
@@ -719,11 +856,11 @@ namespace ns3 {
         }
     }
 
-    VectorCplx CoVRage::normalize(const VectorCplx& vec) {
+    VectorCplx normalize(const VectorCplx& vec) {
         return vec * 1 / sqrt(vec.size());
     }
 
-    double CoVRage::calcSteervecEl(Euler euler, ElLoc elloc) {
+    double calcSteervecEl(Euler euler, ElLoc elloc) {
         return M_PI * 2 * SPACING * (std::sin(euler.yaw) * elloc.x * std::cos(euler.pitch) + elloc.y * std::sin(euler.pitch));
     }
 }

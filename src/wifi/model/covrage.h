@@ -8,6 +8,7 @@
 #include "qd-propagation-engine.h"
 #include "ns3/ptr.h"
 #include "../src/Eigen/Geometry"
+#include <fstream>
 
 #define SPACING 0.25
 
@@ -15,13 +16,15 @@ namespace ns3 {
 
     struct Euler {
         double yaw;
-        double pitch;
         double roll;
+        double pitch;
 
         Euler();
         static Euler from_deg(double az, double el);
         static Euler from_rad(double az, double el);
-        Euler(double yaw, double pitch, double roll);
+        Euler(double yaw, double roll, double pitch);
+        friend std::ostream& operator<<(std::ostream& os, const Euler& euler);
+
 
     private:
         Euler(double az, double el);
@@ -34,6 +37,9 @@ namespace ns3 {
         double dist(const UV& other) const;
         UV extrap(const UV& a, const UV& b) const;
         bool isGood() const;
+        bool isNearEdge() const;
+        friend std::ostream& operator<<(std::ostream& os, const UV& uv);
+
     };
 
     struct Trajectory {
@@ -83,6 +89,8 @@ namespace ns3 {
         WeightsVector GetWeights();
         Vector3D GetDirection(int fromNodeIdx, int toNodeIdx, Time time);
 
+        void SetOutfile(std::ofstream* outfile);
+
     private:
         Pose GetPose(int nodeIdx, Time time);
         void InitializePoseVecs ();
@@ -98,25 +106,25 @@ namespace ns3 {
         void smoothWeights(VectorCplx& awv, const Eigen::MatrixXi& dist, const std::vector<Euler>& midPoints, const std::vector<int>& syncs);
 
 
-        Eigen::Quaterniond VecToQuat(const Vector3D& vec) const;
-        Eigen::Quaterniond EulerToQuat(const Euler& euler) const;
-        Euler QuatToEuler(const Eigen::Quaterniond& q) const;
-        UV EulerToUv(const Euler& eul) const;
-        Euler uvToEuler(const UV& uv);
-        VectorCplx fillFrom(const VectorCplx& source, const MatrixXb& selection);
-        void multiplyWhere(VectorCplx& v, const MatrixXb& selection, cplx multiplier);
-        VectorCplx normalize(const VectorCplx& vec);
-        double calcSteervecEl(Euler euler, ElLoc elloc);
-
-
-
         std::string poseFolder;
         Time interval;
         PoseVecs m_poseVecs;
 
         Dims dims = Dims(64,64);
         Dims blocks = Dims(2,2);
+
+        std::ofstream* outfile;
     };
+
+    Eigen::Quaterniond VecToQuat(const Vector3D& vec);
+    Eigen::Quaterniond EulerToQuat(const Euler& euler);
+    Euler QuatToEuler(const Eigen::Quaterniond& q);
+    UV EulerToUv(const Euler& eul);
+    Euler uvToEuler(const UV& uv);
+    VectorCplx fillFrom(const VectorCplx& source, const MatrixXb& selection);
+    void multiplyWhere(VectorCplx& v, const MatrixXb& selection, cplx multiplier);
+    VectorCplx normalize(const VectorCplx& vec);
+    double calcSteervecEl(Euler euler, ElLoc elloc);
 
 }
 #endif//WIGIG_MODULE_COVRAGE_H

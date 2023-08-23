@@ -1549,6 +1549,8 @@ void
 Codebook::DisableTx() {
   m_txBeamformingSectors[1].erase(m_txBeamformingSectors[1].begin()+1, m_txBeamformingSectors[1].end());
   m_totalTxSectors = 1;
+  m_rxBeamformingSectors[1].erase(m_rxBeamformingSectors[1].begin()+1, m_rxBeamformingSectors[1].end());
+  m_totalRxSectors = 1;
 }
 
 }

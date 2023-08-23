@@ -1327,6 +1327,8 @@ DmgWifiPhy::StartRx (Ptr<Event> event, double rxPowerW)
 {
   NS_LOG_FUNCTION (this << *event << rxPowerW);
 
+  std::cout << "WDBM " << WToDbm(rxPowerW) << " " << GetDevice()->GetAddress() << std::endl;
+
   NS_LOG_DEBUG ("sync to signal (power=" << rxPowerW << "W)");
   m_interference.NotifyRxStart (); //We need to notify it now so that it starts recording events
   if (!m_endPreambleDetectionEvent.IsRunning ())
@@ -1373,6 +1375,7 @@ DmgWifiPhy::StartReceiveHeader (Ptr<Event> event)
 
   InterferenceHelper::SnrPer snrPer = m_interference.CalculateDmgPhyHeaderSnrPer (event); //// WIGIG It should be only SNR calculation
   double snr = snrPer.snr;
+//  std::cout << "DBM " << snr << " " << GetDevice()->GetAddress() << std::endl;
   NS_LOG_DEBUG ("snr(dB)=" << RatioToDb (snrPer.snr) << ", per=" << snrPer.per);
 
   if (!m_preambleDetectionModel || (m_preambleDetectionModel->IsPreambleDetected (event->GetRxPowerW (), snr, m_channelWidth)))
