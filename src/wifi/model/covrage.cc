@@ -55,7 +55,7 @@ namespace ns3 {
 
     WeightsVector CoVRage::GetWeights() {
         Vector3D fromDir =  GetDirection(1, 0, Simulator::Now());
-        Vector3D toDir =  GetDirection(1, 0, Simulator::Now() + Seconds(0.1));
+        Vector3D toDir =  GetDirection(1, 0, Simulator::Now() + Seconds(0.2));
         Eigen::Quaterniond from = VecToQuat(fromDir);
         Eigen::Quaterniond to = VecToQuat(toDir);
 //        Eigen::Quaterniond rot = to * from.inverse();
@@ -305,7 +305,7 @@ namespace ns3 {
                     std::getline(stream, val, ',');
                     pose.second.roll = std::stod(val);
                     std::getline(stream, val, ',');
-                    pose.second.pitch = std::stod(val);
+                    pose.second.pitch = -1* std::stod(val);
                 } else {
                     pose.second = firstRot;
                 }
@@ -721,7 +721,6 @@ namespace ns3 {
     }
 
     Eigen::Quaterniond EulerToQuat(const Euler& euler) {
-        //OK
         double cr = std::cos(euler.roll * 0.5);
         double sr = std::sin(euler.roll * 0.5);
         double cp = std::cos(euler.pitch * 0.5);
