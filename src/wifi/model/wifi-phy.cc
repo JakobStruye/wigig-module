@@ -3619,7 +3619,8 @@ WifiPhy::GetReceptionStatus (Ptr<const WifiPsdu> psdu, Ptr<Event> event, Time re
   SignalNoiseDbm signalNoise;
   signalNoise.signal = WToDbm (event->GetRxPowerW ());
   signalNoise.noise = WToDbm (event->GetRxPowerW () / snrPer.snr);
-  if (m_random->GetValue () > snrPer.per &&
+  bool neverDrop = false;
+  if (neverDrop || m_random->GetValue () > snrPer.per &&
       !(m_postReceptionErrorModel && m_postReceptionErrorModel->IsCorrupt (psdu->GetPacket ()->Copy ())))
     {
       NS_LOG_DEBUG ("Reception succeeded: " << psdu);

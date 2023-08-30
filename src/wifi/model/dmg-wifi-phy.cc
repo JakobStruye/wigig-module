@@ -1418,7 +1418,8 @@ DmgWifiPhy::ContinueReceiveHeader (Ptr<Event> event)
   InterferenceHelper::SnrPer snrPer;
   snrPer = m_interference.CalculateDmgPhyHeaderSnrPer (event);
 
-  if (m_random->GetValue () > snrPer.per) //DMG PHY header reception succeeded
+  bool neverDrop = false;
+  if (neverDrop || m_random->GetValue () > snrPer.per) //DMG PHY header reception succeeded
     {
       NS_LOG_DEBUG ("Received DMG PHY header");
       WifiTxVector txVector = event->GetTxVector ();

@@ -54,12 +54,9 @@ namespace ns3 {
     }
 
     WeightsVector CoVRage::GetWeights() {
-        Vector3D fromDir =  GetDirection(1, 0, Simulator::Now());
-        Vector3D toDir =  GetDirection(1, 0, Simulator::Now() + Seconds(0.2));
-        Eigen::Quaterniond from = VecToQuat(fromDir);
-        Eigen::Quaterniond to = VecToQuat(toDir);
-//        Eigen::Quaterniond rot = to * from.inverse();
-        std::cout << "FROM " << fromDir << " TO " << toDir << " EUL " << QuatToEuler(VecToQuat(toDir)) << " Q " << VecToQuat(toDir) << " " << EulerToUv(QuatToEuler(VecToQuat(toDir))) <<  std::endl;
+        std::vector<Vector3D> dirs = GetDirections(1, 0, Simulator::Now() - Seconds(0.05) , Simulator::Now() + Seconds(0.15));
+        Vector3D& fromDir = dirs.front();
+        Vector3D& toDir = dirs.back();
 
         bool isHor;
         bool isTight = false;
@@ -75,16 +72,19 @@ namespace ns3 {
 
         double progress = 0.0;
         while (progress < 1) {
-            Eigen::Quaterniond newPt = from.slerp(progress, to);
-//            std::cout << "DEBUG " << progress << newPt << std::endl;
-//            std::cout <<"DEBUG " << pointsQ.size() << std::endl;
+            int idx = std::floor(progress * (dirs.size()-1));
+
+            Eigen::Quaterniond thisFrom = VecToQuat(dirs[idx]);
+            Eigen::Quaterniond thisTo = VecToQuat(dirs[idx+1]);
+            double thisProgress = (progress * (dirs.size()-1)) - idx;
+
+            Eigen::Quaterniond newPt = thisFrom.slerp(thisProgress, thisTo);
             pointsEul.push_back(QuatToEuler(newPt));
             pts.push_back(EulerToUv(pointsEul.back()));
             if (pts.size() > 1 && !pts[pts.size()-1].isNearEdge()&& !pts[pts.size()-2].isNearEdge()) {
                 double dist = pts[pts.size() - 1].dist(pts[pts.size() - 2]);
                 rotLen += dist;
                 step *= (targetDist / dist);
-//                std::cout << "DEBUG DIST " << pts.back().u << "," << pts.back().v << " " << pts.back().isNearEdge() << " "   << targetDist << " " << dist << std::endl;
             }
             progress += step;
         }
@@ -190,7 +190,7 @@ namespace ns3 {
         std::vector<Euler> midPoints;
         for (auto &p : t.beamPoints) {
             beamPoints.push_back(uvToEuler(p));
-            std::cout << "UVEUL" << p << " " << beamPoints[beamPoints.size()-1] << std::endl;
+//            std::cout << "UVEUL" << p << " " << beamPoints[beamPoints.size()-1] << std::endl;
         }
         for (auto &p : t.midPoints) {
             midPoints.push_back(uvToEuler(p));
@@ -215,34 +215,38 @@ namespace ns3 {
         return wv;
     }
 
-    Pose CoVRage::GetPose(int nodeIdx, Time time) {
+    Pose CoVRage::GetPose(int nodeIdx, int timeIdx) {
         if (m_poseVecs.empty()) {
             InitializePoseVecs();
         }
-        std::cout << "POSESIZE" << nodeIdx << " " << m_poseVecs[nodeIdx].size() << std::endl;
         if (m_poseVecs[nodeIdx].size() == 1) {
             return m_poseVecs[nodeIdx][0];
         }
 
-        int timeIdx = std::floor(time.GetSeconds() / interval.GetSeconds());
-
         return m_poseVecs[nodeIdx][timeIdx];
     }
 
-    Vector3D CoVRage::GetDirection(int fromNodeIdx, int toNodeIdx, Time time) {
-        Pose fromPose = GetPose(fromNodeIdx, time);
-        Pose toPose = GetPose(toNodeIdx, time);
+    std::vector<Vector3D> CoVRage::GetDirections(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
 
-        Euler fromDir = fromPose.second;
-        Eigen::Quaterniond fromQuat = EulerToQuat(fromDir);
+        int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
+        timeIdxStart = std::max(0, timeIdxStart);
+        int timeIdxStop = std::floor(timeEnd.GetSeconds() / interval.GetSeconds());
 
-        Vector3D diffVec = toPose.first - fromPose.first;
-        Eigen::Vector3d diffVecEigen(diffVec.x, diffVec.y, diffVec.z);
-        diffVecEigen.normalize();
-        Eigen::Vector3d finalVec = fromQuat.inverse() * diffVecEigen;
-        std::cout <<"FROM DIR" << fromDir << " QUAT " << fromQuat.w() << "," <<fromQuat.x() << "," <<fromQuat.y() << "," <<fromQuat.z() << " RESULT " << finalVec.x() << "," << finalVec.y() << "," <<finalVec.z() << std::endl;
-        std::cout << "FROM DIR" << diffVec << " " << std::endl;
-        return Vector3D(finalVec.x(), finalVec.y(), finalVec.z());
+        std::vector<Vector3D> dirs;
+        for (int timeIdx = timeIdxStart; timeIdx <= timeIdxStop; timeIdx++) {
+            Pose fromPose = GetPose(fromNodeIdx, timeIdx);
+            Pose toPose = GetPose(toNodeIdx, timeIdx);
+
+            Euler fromDir = fromPose.second;
+            Eigen::Quaterniond fromQuat = EulerToQuat(fromDir);
+
+            Vector3D diffVec = toPose.first - fromPose.first;
+            Eigen::Vector3d diffVecEigen(diffVec.x, diffVec.y, diffVec.z);
+            diffVecEigen.normalize();
+            Eigen::Vector3d finalVec = fromQuat.inverse() * diffVecEigen;
+            dirs.push_back(Vector3D(finalVec.x(), finalVec.y(), finalVec.z()));
+        }
+        return dirs;
     }
 
     void CoVRage::SetOutfile(std::ofstream* outfile) {
@@ -651,7 +655,6 @@ namespace ns3 {
     }
 
     VectorCplx CoVRage::configureAwv(Eigen::MatrixXi dist, const std::vector<Euler>& eulers) {
-        std::cout << eulers.size() << "EULSIZE" << std::endl;
         std::vector<VectorCplx> weightssets;
         for (size_t idx = 0; idx < eulers.size(); idx++) {
             weightssets.push_back(calcSteervec(eulers[idx], dims));

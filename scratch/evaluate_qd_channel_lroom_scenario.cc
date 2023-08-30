@@ -91,6 +91,8 @@ Ptr<FlowMonitor> monitor;
 
 /* Statistics */
 uint64_t macTxDataFailed = 0;
+uint64_t macTxOK = 0;
+uint64_t macRxOK = 0;
 uint64_t transmittedPackets = 0;
 uint64_t droppedPackets = 0;
 uint64_t receivedPackets = 0;
@@ -191,13 +193,25 @@ MacTxDataFailed (Mac48Address)
 }
 
 void
+MacTxOK (Ptr<const Packet>)
+{
+  macTxOK++;
+}
+
+void
+MacRxOK (Ptr<const Packet>)
+{
+  macRxOK++;
+}
+
+void
 PhyTxEnd (Ptr<const Packet>)
 {
   transmittedPackets++;
 }
 
 void
-PhyRxDrop (Ptr<const Packet>, WifiPhyRxfailureReason)
+PhyRxDrop (Ptr<const Packet>, WifiPhyRxfailureReason reason)
 {
   droppedPackets++;
 }
@@ -229,7 +243,7 @@ main (int argc, char *argv[])
   bool activateApp = true;                        /* Flag to indicate whether we activate OnOff/Bulk Application. */
   string socketType = "ns3::UdpSocketFactory";    /* Socket type (TCP/UDP). */
   uint32_t packetSize = 1448;                     /* Application payload size in bytes. */
-  string dataRate = "3000Mbps";                    /* Application data rate. */
+  string dataRate = "2000Mbps";                    /* Application data rate. */
   string tcpVariant = "NewReno";                  /* TCP Variant Type. */
   uint32_t bufferSize = 131072;                   /* TCP Send/Receive Buffer Size. */
   uint32_t maxPackets = 0;                        /* Maximum Number of Packets */
@@ -242,7 +256,7 @@ main (int argc, char *argv[])
   uint16_t startDistance = 0;                     /* Starting distance in the Trace-File. */
   bool enableMobility = true;                     /* Enable mobility. */
   bool verbose = false;                           /* Print logging information. */
-  double simulationTime = 19;                     /* Simulation time in seconds. */
+  double simulationTime = 10;                     /* Simulation time in seconds. */
   string directory = "";                          /* Path to the directory where to store the results. */
   bool pcapTracing = false;                       /* Fla to indicate if PCAP tracing is enabled or not. */
   string arrayConfig = "28";                      /* Phased antenna array configuration. */
@@ -316,7 +330,6 @@ main (int argc, char *argv[])
     {
       qdPropagationEngine->SetAttribute ("Interval", TimeValue (interval));
     }
-
    covrage = new CoVRage("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Input/", interval);
 
    std::ofstream outfile("CoVRage.txt");
@@ -480,15 +493,18 @@ main (int argc, char *argv[])
   apWifiMac->TraceConnectWithoutContext ("DTIStarted", MakeBoundCallback (&DataTransmissionIntervalStarted,
                                                                           apWifiMac, staWifiMac));
   apWifiMac->TraceConnectWithoutContext ("SLSCompleted", MakeBoundCallback (&SLSCompleted, apWifiMac));
-  apWifiPhy->TraceConnectWithoutContext ("PhyRxEnd", MakeCallback (&PhyRxEnd));
-  apWifiPhy->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback (&PhyRxDrop));
+  apWifiPhy->TraceConnectWithoutContext ("PhyTxEnd", MakeCallback (&PhyTxEnd));
+  apRemoteStationManager->TraceConnectWithoutContext ("MacTxDataFailed", MakeCallback (&MacTxDataFailed));
+  apWifiMac->TraceConnectWithoutContext ("MacTx", MakeCallback (&MacTxOK));
 
   /* DMG STA Straces */
   slsTracerHelper->ConnectTrace (staWifiMac);
   staWifiMac->TraceConnectWithoutContext ("Assoc", MakeBoundCallback (&StationAssoicated, staWifiMac));
   staWifiMac->TraceConnectWithoutContext ("SLSCompleted", MakeBoundCallback (&SLSCompletedSta, staWifiMac));
-  staWifiPhy->TraceConnectWithoutContext ("PhyTxEnd", MakeCallback (&PhyTxEnd));
-  staRemoteStationManager->TraceConnectWithoutContext ("MacTxDataFailed", MakeCallback (&MacTxDataFailed));
+  staWifiPhy->TraceConnectWithoutContext ("PhyRxEnd", MakeCallback (&PhyRxEnd));
+  staWifiPhy->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback (&PhyRxDrop));
+  staWifiMac->TraceConnectWithoutContext ("MacRx", MakeCallback (&MacRxOK));
+
 
   /* Get SNR Traces */
   AsciiTraceHelper ascii;
@@ -572,6 +588,8 @@ main (int argc, char *argv[])
 
       /* Print MAC Layer Statistics */
       std::cout << "\nMAC Layer Statistics:" << std::endl;;
+      std::cout << "  Number of MAC packets offered:  " << macTxOK << std::endl;
+      std::cout << "  Number of MAC packets arrived:  " << macRxOK << std::endl;
       std::cout << "  Number of Failed Tx Data Packets:  " << macTxDataFailed << std::endl;
 
       /* Print PHY Layer Statistics */

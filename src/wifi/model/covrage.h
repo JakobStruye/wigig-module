@@ -87,12 +87,12 @@ namespace ns3 {
     public:
         CoVRage(std::string poseFolder, Time interval);
         WeightsVector GetWeights();
-        Vector3D GetDirection(int fromNodeIdx, int toNodeIdx, Time time);
+        std::vector<Vector3D> GetDirections(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
 
         void SetOutfile(std::ofstream* outfile);
 
     private:
-        Pose GetPose(int nodeIdx, Time time);
+        Pose GetPose(int nodeIdx, int timeIdx);
         void InitializePoseVecs ();
 
         double GetWidthUv(int elCount);

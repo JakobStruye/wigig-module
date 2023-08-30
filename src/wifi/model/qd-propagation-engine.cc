@@ -533,7 +533,7 @@ QdPropagationEngine::HandleMobility (void) const
   NS_LOG_FUNCTION (this);
   if (m_interval.IsStrictlyPositive () || doRecalc)
     {
-      uint32_t traceIndex = m_startIndex + (Simulator::Now ()/m_interval).GetHigh ();
+      uint32_t traceIndex = m_interval.IsStrictlyPositive () ? m_startIndex + (Simulator::Now ()/m_interval).GetHigh () : 0;
       /* We keep using the channel corresponding to the last entry in the Q-D file */
       if (((traceIndex < m_numTraces) && (traceIndex != m_currentIndex)) || doRecalc)
         {
