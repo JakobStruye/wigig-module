@@ -14,6 +14,7 @@
 #include "ns3/beamforming-trace-helper.h"
 #include "ns3/energy-module.h"
 #include "ns3/covrage.h"
+#include "ns3/system-path.h"
 
 #include <iomanip>
 #include <sstream>
@@ -105,6 +106,12 @@ CoVRage* covrage;
 std::map<Time, uint> pktsPerBurstRcvd;
 std::map<Time, Time> latestPerBurstRcvd;
 
+string beamforming = "covrage";
+string directory = "";
+
+std::ofstream tputfile;
+
+
 void
 CalculateThroughput (void)
 {
@@ -117,6 +124,7 @@ CalculateThroughput (void)
       std::cout << std::left << std::setw (14) << duration
                 << std::left << std::setw (14) << thr
                 << std::left << std::setw (14) << qdPropagationEngine->GetCurrentTraceIndex () << std::endl;
+      tputfile << duration << " " << thr << std::endl;
     }
   else
     {
@@ -140,9 +148,11 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 void
 SLSCompletedSta (Ptr<DmgStaWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 {
-    WeightsVector wv = covrage->GetWeights();
-    wifiMac->hijackTx(apWifiMac->GetAddress(), wv);
-    qdPropagationEngine->ForceRecalc();
+    if (beamforming == "covrage") {
+      WeightsVector wv = covrage->GetWeights();
+      wifiMac->hijackTx(apWifiMac->GetAddress(), wv);
+      qdPropagationEngine->ForceRecalc();
+    }
     SLSCompleted(wifiMac, attributes);
 }
 
@@ -178,8 +188,10 @@ DataTransmissionIntervalStarted (Ptr<DmgApWifiMac> apWifiMac, Ptr<DmgStaWifiMac>
       biCounter++;
       if (biCounter == biThreshold)
         {
-          Ptr<Codebook> cb = staWifiMac->GetCodebook();
-          cb->DisableTx();
+          if (beamforming != "sectors") {
+              Ptr<Codebook> cb = staWifiMac->GetCodebook();
+              cb->DisableTx();
+          }
           apWifiMac->Perform_TXSS_TXOP (staWifiMac->GetAddress());
           biCounter = 0;
         }
@@ -223,6 +235,15 @@ PhyRxEnd (Ptr<const Packet>)
 }
 
 void
+tagMade (const TimestampTag& tag) {
+  Time t = tag.GetTimestamp();
+  auto it = pktsPerBurstRcvd.find(t);
+  if (it == pktsPerBurstRcvd.end()) {
+        pktsPerBurstRcvd[t] = 0;
+  }
+}
+
+void
 pktReceived (Ptr<BurstApplication> sender, const Ptr<const Packet> pkt, const Address &)
 {
   TimestampTag tag;
@@ -243,7 +264,7 @@ main (int argc, char *argv[])
   bool activateApp = true;                        /* Flag to indicate whether we activate OnOff/Bulk Application. */
   string socketType = "ns3::UdpSocketFactory";    /* Socket type (TCP/UDP). */
   uint32_t packetSize = 1448;                     /* Application payload size in bytes. */
-  string dataRate = "2000Mbps";                    /* Application data rate. */
+  string dataRate = "7000Mbps";                    /* Application data rate. */
   string tcpVariant = "NewReno";                  /* TCP Variant Type. */
   uint32_t bufferSize = 131072;                   /* TCP Send/Receive Buffer Size. */
   uint32_t maxPackets = 0;                        /* Maximum Number of Packets */
@@ -251,15 +272,19 @@ main (int argc, char *argv[])
   string mpduAggSize = "max";                     /* The maximum aggregation size for A-MPDU in Bytes. */
   bool enableRts = false;                         /* Flag to indicate if RTS/CTS handskahre is enabled or disabled. */
   uint32_t rtsThreshold = 0;                      /* RTS/CTS handshare threshold. */
-  string queueSize = "4000p";                     /* Wifi MAC Queue Size. */
-  string phyMode = "DMG_MCS12";                   /* Type of the DMG physical layer. */
+  string queueSize = "10000p";                     /* Wifi MAC Queue Size. */
+  string phyMode = "EDMG_SC_MCS21";                   /* Type of the DMG physical layer. */
   uint16_t startDistance = 0;                     /* Starting distance in the Trace-File. */
   bool enableMobility = true;                     /* Enable mobility. */
   bool verbose = false;                           /* Print logging information. */
-  double simulationTime = 10;                     /* Simulation time in seconds. */
-  string directory = "";                          /* Path to the directory where to store the results. */
+  double simulationTime = 19;                     /* Simulation time in seconds. */
   bool pcapTracing = false;                       /* Fla to indicate if PCAP tracing is enabled or not. */
   string arrayConfig = "28";                      /* Phased antenna array configuration. */
+
+  string txSize = "Small";
+  string rxSize = "Big";
+  int fps = 100;
+
 
   /* Command line argument parser setup. */
   CommandLine cmd;
@@ -282,19 +307,29 @@ main (int argc, char *argv[])
   cmd.AddValue ("enableMobility", "Whether to enable mobility or simulate static scenario", enableMobility);
   cmd.AddValue ("verbose", "Turn on all WifiNetDevice log components", verbose);
   cmd.AddValue ("simulationTime", "Simulation time in seconds", simulationTime);
-  cmd.AddValue ("directory", "Path to the directory where we store the results", directory);
   cmd.AddValue ("pcap", "Enable PCAP Tracing", pcapTracing);
   cmd.AddValue ("arrayConfig", "Antenna array configuration", arrayConfig);
   cmd.AddValue ("csv", "Enable CSV output instead of plain text. This mode will suppress all the messages related statistics and events.", csv);
+
+  cmd.AddValue ("txSize", "Tx array size (Small/Big)", txSize);
+  cmd.AddValue ("rxSize", "Rx array size (Small/Big)", rxSize);
+  cmd.AddValue ("beamforming", "Rx beamforming type (covrage/sectors/none)", beamforming);
+  cmd.AddValue ("fps", "Frames per second transmitted", fps);
+
+
   cmd.Parse (argc, argv);
 
+  directory = "output/bf_" + beamforming + "_tx_" + txSize + "_rx_" + rxSize + "_fps_" + to_string(fps) + "_data_" + dataRate + "_mob_" + to_string(enableMobility) + "/";
+  SystemPath::MakeDirectories(directory);
+  tputfile = std::ofstream(directory + "throughput");
+  auto standard = WIFI_PHY_STANDARD_80211ay;
   /* Validate A-MSDU and A-MPDU values */
-  ValidateFrameAggregationAttributes (msduAggSize, mpduAggSize);
+  ValidateFrameAggregationAttributes (msduAggSize, mpduAggSize, standard);
   /* Configure RTS/CTS and Fragmentation */
   ConfigureRtsCtsAndFragmenatation (enableRts, rtsThreshold);
   /* Wifi MAC Queue Parameters */
   ChangeQueueSize (queueSize);
-  Config::SetDefault ("ns3::WifiMacQueue::MaxDelay", TimeValue(MilliSeconds(10)));
+  Config::SetDefault ("ns3::WifiMacQueue::MaxDelay", TimeValue(MilliSeconds(20)));
 
   /*** Configure TCP Options ***/
   ConfigureTcpOptions (tcpVariant, packetSize, bufferSize);
@@ -303,7 +338,7 @@ main (int argc, char *argv[])
   DmgWifiHelper wifi;
 
   /* Basic setup */
-  wifi.SetStandard (WIFI_PHY_STANDARD_80211ad);
+  wifi.SetStandard (standard);
 
   /* Turn on logging */
   if (verbose)
@@ -316,7 +351,7 @@ main (int argc, char *argv[])
   Ptr<MultiModelSpectrumChannel> spectrumChannel = CreateObject<MultiModelSpectrumChannel> ();
   qdPropagationEngine = CreateObject<QdPropagationEngine> ();
 //  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("WigigFiles/QdChannel/L-ShapedRoom/"));
-  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Output/Ns3/"));
+  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("../qd-realization/src/examples/BoxLectureRoom/Output/Ns3/"));
   //  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/mnt/windows/Users/user/"));
 
 
@@ -330,9 +365,9 @@ main (int argc, char *argv[])
     {
       qdPropagationEngine->SetAttribute ("Interval", TimeValue (interval));
     }
-   covrage = new CoVRage("/home/jstr/git/qd-realization/src/examples/BoxLectureRoom/Input/", interval);
+   covrage = new CoVRage("../qd-realization/src/examples/BoxLectureRoom/Input/", interval);
 
-   std::ofstream outfile("CoVRage.txt");
+   std::ofstream outfile(directory + "CoVRage.txt");
    covrage->SetOutfile(&outfile);
    qdPropagationEngine->SetOutfile(&outfile);
 
@@ -343,8 +378,16 @@ main (int argc, char *argv[])
   spectrumWifiPhy.Set ("TxPowerStart", DoubleValue (10.0));
   spectrumWifiPhy.Set ("TxPowerEnd", DoubleValue (10.0));
   spectrumWifiPhy.Set ("TxPowerLevels", UintegerValue (1));
+  if (true)
+  {
+      spectrumWifiPhy.Set ("PreambleDetectionModel", StringValue ("ns3::ThresholdPreambleDetectionModel"));
+      Config::SetDefault ("ns3::ThresholdPreambleDetectionModel::MinimumRssi", DoubleValue (-78));
+      Config::SetDefault ("ns3::ThresholdPreambleDetectionModel::Threshold", DoubleValue (-10));
+  }
   /* Set the operational channel */
   spectrumWifiPhy.Set ("ChannelNumber", UintegerValue (2));
+  spectrumWifiPhy.SetErrorRateModel ("ns3::DmgErrorModel",
+                                    "FileName", StringValue ("WigigFiles/ErrorModel/LookupTable_1458_ay.txt"));
   /* Set default algorithm for all nodes to be constant rate */
   wifi.SetRemoteStationManager ("ns3::CbtraaDmgWifiManager");//, "DataMode", StringValue (phyMode));
 //  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (phyMode));
@@ -364,14 +407,15 @@ main (int argc, char *argv[])
                    "BE_MaxAmpduSize", StringValue (mpduAggSize),
                    "BE_MaxAmsduSize", StringValue (msduAggSize),
                    "SSSlotsPerABFT", UintegerValue (8), "SSFramesPerSlot", UintegerValue (13),
-                   "BeaconInterval", TimeValue (MicroSeconds (102400))//,
+                   "BeaconInterval", TimeValue (MicroSeconds (102400)),
+                  "EDMGSupported", BooleanValue (true)
                    //"IsResponderTXSS", BooleanValue(false)
                   );
 
   /* Set Parametric Codebook for the DMG AP */
 //  wifi.SetCodebook ("ns3::CodebookParametric",
 //                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_AP_" + arrayConfig + "x.txt"));
-    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParamSmall"));
+    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam" + txSize));
 
 
   /* Create Wifi Network Devices (WifiNetDevice) */
@@ -381,12 +425,13 @@ main (int argc, char *argv[])
   wifiMac.SetType ("ns3::DmgStaWifiMac",
                    "Ssid", SsidValue (ssid), "ActiveProbing", BooleanValue (false),
                    "BE_MaxAmpduSize", StringValue (mpduAggSize),
-                   "BE_MaxAmsduSize", StringValue (msduAggSize));
+                   "BE_MaxAmsduSize", StringValue (msduAggSize),
+                  "EDMGSupported", BooleanValue (true));
 
   /* Set Parametric Codebook for the DMG STA */
 //  wifi.SetCodebook ("ns3::CodebookParametric",
 //                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_STA_" + arrayConfig + "x.txt"));
-    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParamBig"));
+    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam" + rxSize));
 
 
   staDevices = wifi.Install (spectrumWifiPhy, wifiMac, staWifiNode);
@@ -446,12 +491,13 @@ main (int argc, char *argv[])
           BurstHelper src (socketType, dest);
           src.SetAttribute ("MaxPackets", UintegerValue (maxPackets));
           src.SetAttribute ("PacketSize", UintegerValue (packetSize));
-          src.SetAttribute ("BurstsPerSecond", StringValue ("ns3::ConstantRandomVariable[Constant=100]"));
+          src.SetAttribute ("BurstsPerSecond", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(fps) + "]"));
 //          src.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
           src.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
           src.SetAttribute("EnableTimestamp", BooleanValue(true));
           srcApp = src.Install (apWifiNode);
           onoff = StaticCast<BurstApplication> (srcApp.Get (0));
+          onoff->TraceConnectWithoutContext("TagCreated", MakeCallback(&tagMade));
           packetSink->TraceConnectWithoutContext ("Rx", MakeBoundCallback(&pktReceived, onoff));
 
         }
@@ -528,8 +574,11 @@ main (int argc, char *argv[])
       Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
     }
 
-  Simulator::Stop (Seconds (simulationTime + 0.101));
+  Simulator::Stop (Seconds (simulationTime + 0.201));
   Simulator::Run ();
+  std::ofstream summaryfile(directory+"summary");
+  std::streambuf* orig_cout = std::cout.rdbuf();
+  std::cout.rdbuf(summaryfile.rdbuf());
   for (DeviceEnergyModelContainer::Iterator iter = deviceModels.Begin (); iter != deviceModels.End (); iter ++)
   {
       double energyConsumed = (*iter)->GetTotalEnergyConsumption ();
@@ -561,7 +610,7 @@ main (int argc, char *argv[])
             myFile.open (directory + "delays.out");
             uint64_t good = 0;
             uint64_t bad = 0;
-            std::vector<double> usDelays;
+            std::vector<std::pair<int64_t,double>> usDelays;
             for (auto it = pktsPerBurstRcvd.begin(); it != pktsPerBurstRcvd.end(); it++) {
               if (Seconds(simulationTime) - it->first < Seconds(0.1)) {
                   //ignore
@@ -570,17 +619,18 @@ main (int argc, char *argv[])
                   bad += 1;
               } else {
                   good += 1;
-                  usDelays.push_back((latestPerBurstRcvd[it->first] - it->first).GetMicroSeconds());
               }
+              usDelays.push_back({(latestPerBurstRcvd[it->first] - it->first).GetMicroSeconds(), it->second / (double)onoff->GetPktsPerBurst()});
 
             }
             std::sort(usDelays.begin(), usDelays.end());
-            for (double v: usDelays) {
-              myFile << v << std::endl;
+            for (auto v: usDelays) {
+              myFile << v.first << " " << v.second << std::endl;
             }
             myFile << good << " " << bad << std::endl;
             myFile.close();
         }
+
 
       std::cout << "  Rx Packets: " << packetSink->GetTotalReceivedPackets () << std::endl;
       std::cout << "  Rx Bytes:   " << packetSink->GetTotalRx () << std::endl;
@@ -597,8 +647,13 @@ main (int argc, char *argv[])
       std::cout << "  Number of Tx Packets:         " << transmittedPackets << std::endl;
       std::cout << "  Number of Rx Packets:         " << receivedPackets << std::endl;
       std::cout << "  Number of Rx Dropped Packets: " << droppedPackets << std::endl;
-    }
+
+      std::cout.rdbuf(orig_cout);
+      summaryfile.close();
+
+  }
   Simulator::Destroy ();
+  tputfile.close();
   outfile.close();
 
   return 0;

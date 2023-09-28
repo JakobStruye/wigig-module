@@ -222,7 +222,9 @@ namespace ns3 {
         if (m_poseVecs[nodeIdx].size() == 1) {
             return m_poseVecs[nodeIdx][0];
         }
-
+        if (m_poseVecs[nodeIdx].size() <= (unsigned) timeIdx) {
+            throw std::runtime_error("Simulation running for longer than the raytracer!");
+        }
         return m_poseVecs[nodeIdx][timeIdx];
     }
 
@@ -290,7 +292,7 @@ namespace ns3 {
                     break;
                 }
                 std::istringstream stream;
-                if (!posFile.eof()) {
+                if (!posFile.eof() || posLine.size() > 4) {
                     stream = std::istringstream(posLine);
                     std::getline(stream, val, ',');
                     pose.first.x = std::stod(val);
@@ -302,7 +304,7 @@ namespace ns3 {
                     pose.first = firstPos;
                 }
 
-                if (!rotFile.eof()) {
+                if (!rotFile.eof() || rotLine.size() > 4) {
                     stream = std::istringstream (rotLine);
                     std::getline(stream, val, ',');
                     pose.second.yaw = std::stod(val);// + M_PI/2.0;

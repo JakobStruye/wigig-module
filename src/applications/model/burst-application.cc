@@ -42,7 +42,6 @@
 #include "ns3/string.h"
 #include "ns3/pointer.h"
 #include "ns3/seq-ts-header.h"
-#include "timestamp-tag.h"
 
 namespace ns3 {
 
@@ -107,6 +106,9 @@ BurstApplication::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&BurstApplication::m_enableE2EStats),
                    MakeBooleanChecker ())
+    .AddTraceSource ("TagCreated", "A new tag is created and is sent",
+                    MakeTraceSourceAccessor (&BurstApplication::m_tagCreated),
+                    "ns3::BurstAppliation::TagTracedCallback")
     .AddTraceSource ("Tx", "A new packet is created and is sent",
                      MakeTraceSourceAccessor (&BurstApplication::m_txTrace),
                      "ns3::Packet::TracedCallback")
@@ -356,6 +358,7 @@ void BurstApplication::SendPacket ()
       TimestampTag timestamp;
       timestamp.SetTimestamp (Simulator::Now ());
       packet->AddByteTag (timestamp);
+      m_tagCreated(timestamp);
     }
 
   m_txTrace (packet);

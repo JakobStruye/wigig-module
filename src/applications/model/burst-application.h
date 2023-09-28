@@ -32,6 +32,8 @@
 #include "ns3/data-rate.h"
 #include "ns3/traced-callback.h"
 #include "ns3/e2e-stats-header.h"
+#include "timestamp-tag.h"
+
 
 namespace ns3 {
 
@@ -191,6 +193,7 @@ private:
   uint32_t        m_pktsPerBurst;
   uint32_t        m_pktsSent;
 
+  TracedCallback<const TimestampTag& > m_tagCreated;
 
   /// Traced Callback: transmitted packets.
   TracedCallback<Ptr<const Packet> > m_txTrace;

@@ -79,7 +79,7 @@ main (int argc, char *argv[])
   string msduAggSize = "max";                   /* The maximum aggregation size for A-MSDU in Bytes. */
   string mpduAggSize = "max";                   /* The maximum aggregation size for A-MPDU in Bytes. */
   string queueSize = "4000p";                   /* Wifi MAC Queue Size. */
-  string standard = "ad";                       /* The WiGig standard being utilized (ad/ay). */
+  string standard = "ay";                       /* The WiGig standard being utilized (ad/ay). */
   uint32_t channel = 2;                         /* WiGig channel number. */
   bool enableRts = false;                       /* Flag to indicate if RTS/CTS handskahre is enabled or disabled. */
   uint32_t rtsThreshold = 0;                    /* RTS/CTS handshare threshold. */

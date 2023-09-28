@@ -1327,7 +1327,7 @@ DmgWifiPhy::StartRx (Ptr<Event> event, double rxPowerW)
 {
   NS_LOG_FUNCTION (this << *event << rxPowerW);
 
-  std::cout << "WDBM " << WToDbm(rxPowerW) << " " << GetDevice()->GetAddress() << std::endl;
+//  std::cout << "WDBM " << WToDbm(rxPowerW) << " " << GetDevice()->GetAddress() << std::endl;
 
   NS_LOG_DEBUG ("sync to signal (power=" << rxPowerW << "W)");
   m_interference.NotifyRxStart (); //We need to notify it now so that it starts recording events

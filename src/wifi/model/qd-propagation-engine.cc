@@ -508,6 +508,8 @@ QdPropagationEngine::GetChannelGain (Ptr<SpectrumValue> rxPsd,
                   indexRxAzimuth = aoaAzimuthTxRx[chId].at (pathIndex);
                   indexRxElevation = aoaElevationTxRx[chId].at (pathIndex);
                   rxSum = rxCodebook->GetAntennaArrayPattern (rxPattern, indexRxAzimuth, indexRxElevation);
+//                  rxSum = std::complex<double>(232.61,  -337.153);
+//                  std::cout << "rxsum " << std::abs(rxSum) << " " << rxSum <<  std::endl;
                   // Normalize at the receiver to take into acccount noise amplification (Check our WiKi page
                   // for more explanation regarding link budget calculations).
                   rxSum /= DynamicCast<ParametricPatternConfig> (rxPattern)->GetNormalizationFactor ();
