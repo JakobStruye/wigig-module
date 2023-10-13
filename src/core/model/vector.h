@@ -159,6 +159,8 @@ public:
    */
   friend Vector3D operator - (const Vector3D &a, const Vector3D &b);
 
+  friend Vector3D operator * (const Vector3D &a, const double &b);
+
   friend Vector3D operator / (const Vector3D &a, const double &b);
 };
 

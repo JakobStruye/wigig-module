@@ -7,6 +7,7 @@
 
 #include "qd-propagation-engine.h"
 #include "ns3/ptr.h"
+#include "ns3/vector.h"
 #include "../src/Eigen/Geometry"
 #include <fstream>
 
@@ -88,6 +89,9 @@ namespace ns3 {
         CoVRage(std::string poseFolder, Time interval);
         WeightsVector GetWeights();
         std::vector<Vector3D> GetDirections(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
+        std::vector<Vector3D> GetDirectionsPredict(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
+        std::vector<Vector3D> GetDirectionsPredict2(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
+
 
         void SetOutfile(std::ofstream* outfile);
 
@@ -105,6 +109,7 @@ namespace ns3 {
         VectorCplx configureAwv(Eigen::MatrixXi dist, const std::vector<Euler>& eulers);
         void smoothWeights(VectorCplx& awv, const Eigen::MatrixXi& dist, const std::vector<Euler>& midPoints, const std::vector<int>& syncs);
 
+        Vector3D getDirBetween(const Pose& from, const Pose& to);
 
         std::string poseFolder;
         Time interval;

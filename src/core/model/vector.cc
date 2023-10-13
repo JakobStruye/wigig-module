@@ -178,6 +178,11 @@ operator - (const Vector3D &a, const Vector3D &b)
 }
 
 Vector3D
+operator * (const Vector3D &a, const double& b) {
+  return Vector3D (a.x * b, a.y * b, a.z * b);
+}
+
+Vector3D
 operator / (const Vector3D &a, const double& b) {
   return Vector3D (a.x / b, a.y / b, a.z / b);
 }

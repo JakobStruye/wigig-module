@@ -145,6 +145,18 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
     }
 }
 
+//void
+//DoCovrage (void)
+//{
+//    if (beamforming == "covrage") {
+//      WeightsVector wv = covrage->GetWeights();
+//      staWifiMac->hijackTx(apWifiMac->GetAddress(), wv);
+//      qdPropagationEngine->ForceRecalc();
+//    }
+//
+//    Simulator::Schedule (MilliSeconds (1), &DoCovrage);
+//}
+
 void
 SLSCompletedSta (Ptr<DmgStaWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 {
@@ -178,6 +190,7 @@ StationAssoicated (Ptr<DmgWifiMac> staWifiMac, Mac48Address address, uint16_t ai
     {
 //      bulk->StartApplication ();
     }
+//    DoCovrage();
 }
 
 void

@@ -3,7 +3,6 @@
 //
 
 #include "covrage.h"
-#include "ns3/vector.h"
 #include "ns3/core-module.h"
 
 namespace ns3 {
@@ -12,8 +11,8 @@ namespace ns3 {
     Euler::Euler(double az, double el) : yaw(az), roll(0), pitch(el) {}
     Euler::Euler(double yaw, double roll, double pitch) : yaw(yaw), roll(roll), pitch(pitch) {}
 
-    std::ostream& operator<<(std::ostream& os, const Euler& euler) {
-        os << euler.yaw <<"," << euler.roll << "," << euler.pitch;
+    std::ostream &operator<<(std::ostream &os, const Euler &euler) {
+        os << euler.yaw << "," << euler.roll << "," << euler.pitch;
         return os;
     }
 
@@ -23,7 +22,7 @@ namespace ns3 {
         return std::sqrt(std::pow(this->u - other.u, 2) + std::pow(this->v - other.v, 2));
     }
 
-    UV UV::extrap(const UV& a, const UV& b) const {
+    UV UV::extrap(const UV &a, const UV &b) const {
         //From this, extrapolate over the vector b-a
         return UV(this->u + (b.u - a.u), this->v + (b.v - a.v));
     }
@@ -36,15 +35,15 @@ namespace ns3 {
         return 1 - std::pow(u, 2) - std::pow(v, 2) <= 0.00001;
     }
 
-    std::ostream& operator<<(std::ostream& os, const UV& uv) {
-        os << uv.u <<"," << uv.v;
+    std::ostream &operator<<(std::ostream &os, const UV &uv) {
+        os << uv.u << "," << uv.v;
         return os;
     }
 
     Dims::Dims(int width, int height) : width(width), height(height) {}
 
-    std::ostream& operator<<(std::ostream& os, const Dims& dims) {
-        os << dims.width <<"," << dims.height;
+    std::ostream &operator<<(std::ostream &os, const Dims &dims) {
+        os << dims.width << "," << dims.height;
         return os;
     }
 
@@ -54,14 +53,15 @@ namespace ns3 {
     }
 
     WeightsVector CoVRage::GetWeights() {
-        std::vector<Vector3D> dirs = GetDirections(1, 0, Simulator::Now() - Seconds(0.05) , Simulator::Now() + Seconds(0.15));
-        Vector3D& fromDir = dirs.front();
-        Vector3D& toDir = dirs.back();
+        std::vector<Vector3D> dirs = GetDirections(1, 0, Simulator::Now() - Seconds(0.05), Simulator::Now() + Seconds(0.15));
+
+        Vector3D &fromDir = dirs.front();
+        Vector3D &toDir = dirs.back();
 
         bool isHor;
         bool isTight = false;
         DiagType diag;
-        Dims blocks(2,2);
+        Dims blocks(2, 2);
 
         Trajectory t;
         auto &pts = t.allPoints;
@@ -72,16 +72,16 @@ namespace ns3 {
 
         double progress = 0.0;
         while (progress < 1) {
-            int idx = std::floor(progress * (dirs.size()-1));
+            int idx = std::floor(progress * (dirs.size() - 1));
 
             Eigen::Quaterniond thisFrom = VecToQuat(dirs[idx]);
-            Eigen::Quaterniond thisTo = VecToQuat(dirs[idx+1]);
-            double thisProgress = (progress * (dirs.size()-1)) - idx;
+            Eigen::Quaterniond thisTo = VecToQuat(dirs[idx + 1]);
+            double thisProgress = (progress * (dirs.size() - 1)) - idx;
 
             Eigen::Quaterniond newPt = thisFrom.slerp(thisProgress, thisTo);
             pointsEul.push_back(QuatToEuler(newPt));
             pts.push_back(EulerToUv(pointsEul.back()));
-            if (pts.size() > 1 && !pts[pts.size()-1].isNearEdge()&& !pts[pts.size()-2].isNearEdge()) {
+            if (pts.size() > 1 && !pts[pts.size() - 1].isNearEdge() && !pts[pts.size() - 2].isNearEdge()) {
                 double dist = pts[pts.size() - 1].dist(pts[pts.size() - 2]);
                 rotLen += dist;
                 step *= (targetDist / dist);
@@ -92,7 +92,7 @@ namespace ns3 {
         double pathlen = 0;
         for (size_t i = 1; i < pts.size(); i++) {
             pathlen += pts[i].dist(pts[i - 1]);
-//            std::cout << "DEBUG " << i << " DIST " <<  pts[i].dist(pts[i - 1]) << " VS " << (pointsQ[i-1]->angularDistance(*pointsQ[i])) << std::endl;
+            //            std::cout << "DEBUG " << i << " DIST " <<  pts[i].dist(pts[i - 1]) << " VS " << (pointsQ[i-1]->angularDistance(*pointsQ[i])) << std::endl;
         }
 
         UV fromUv = EulerToUv(QuatToEuler(VecToQuat(fromDir)));
@@ -102,10 +102,10 @@ namespace ns3 {
                        std::abs(toUv.u - fromUv.u);
 
         isHor = slope < 1;
-        double modSlope = isHor ? slope : 1.0/slope;
-        if (abs(modSlope) < 1/3.0)
+        double modSlope = isHor ? slope : 1.0 / slope;
+        if (abs(modSlope) < 1 / 3.0)
             diag = NODIAG;
-        else if (abs(modSlope) < 2/3.0)
+        else if (abs(modSlope) < 2 / 3.0)
             diag = INBETWEEN;
         else
             diag = DIAG;
@@ -124,9 +124,9 @@ namespace ns3 {
             std::exit(1);
 
 
-//        std::cout << pts.size() << "VS" << beamCount << std::endl;
+        //        std::cout << pts.size() << "VS" << beamCount << std::endl;
         bool fewPoints = false;
-        while (pts.size() < (size_t) beamCount*2) {
+        while (pts.size() < (size_t) beamCount * 2) {
 
 
             //Add points until we have enough in low-mobility cases
@@ -134,15 +134,15 @@ namespace ns3 {
 
             fewPoints = true;
         }
-//        std::cout << pts.size() << "VS" << beamCount << std::endl;
+        //        std::cout << pts.size() << "VS" << beamCount << std::endl;
         double baseradius = pathlen / (beamCount - 1) / 2;
         if (baseradius < 10e-10) {
             baseradius = 0;
         }
         bool hasCircle = false;
         double runningDist = 0;
-        UV* circlePoint = &(pts[0]);
-//        std::cout << "DEBUG" << " BASERAD " << baseradius << " PATHLEN " << pathlen <<  std::endl;
+        UV *circlePoint = &(pts[0]);
+        //        std::cout << "DEBUG" << " BASERAD " << baseradius << " PATHLEN " << pathlen <<  std::endl;
         for (int i = 0; i < (int) pts.size(); i++) {
             UV &curPoint = pts[i];
             UV &prevPoint = pts[std::max(0, i - 1)];
@@ -150,7 +150,7 @@ namespace ns3 {
             if (!fewPoints && i > 0 && runningDist < baseradius) {
                 continue;
             }
-//            std::cout << "DEBUG" << " ADDING " << (!hasCircle ? " BEAM " : " MIDPT ") << " AT i " << i << " RUNDIST " << runningDist << std::endl;
+            //            std::cout << "DEBUG" << " ADDING " << (!hasCircle ? " BEAM " : " MIDPT ") << " AT i " << i << " RUNDIST " << runningDist << std::endl;
 
             if (!hasCircle) {
                 t.beamPoints.push_back(prevPoint);
@@ -161,7 +161,7 @@ namespace ns3 {
             }
             hasCircle = !hasCircle;
             runningDist = curPoint.dist(prevPoint);
-//            std::cout << "DEBUG RUNDIST REVERT " << runningDist << std::endl;
+            //            std::cout << "DEBUG RUNDIST REVERT " << runningDist << std::endl;
         }
         if (!hasCircle && pts.size() == 1) {
             //Why is this?
@@ -178,32 +178,33 @@ namespace ns3 {
             while (!extrap.isGood()) {
                 extrap = extrap.extrap(pointB, pointA);
             }
-            t.beamPoints.push_back(extrap); //Move back one, got too far.
+            t.beamPoints.push_back(extrap);//Move back one, got too far.
         }
 
         adjustPoints(t, isHor, isTight, diag);
-        Dims subarrDims(2,2);
+        Dims subarrDims(2, 2);
         Eigen::MatrixXi dist = configureInterleavedRect(dims, subarrDims, isHor, isTight, diag);
         dist = combineDist(dist, t.beamMapping);
 
         std::vector<Euler> beamPoints;
         std::vector<Euler> midPoints;
-        for (auto &p : t.beamPoints) {
+        for (auto &p: t.beamPoints) {
             beamPoints.push_back(uvToEuler(p));
-//            std::cout << "UVEUL" << p << " " << beamPoints[beamPoints.size()-1] << std::endl;
+            //            std::cout << "UVEUL" << p << " " << beamPoints[beamPoints.size()-1] << std::endl;
         }
-        for (auto &p : t.midPoints) {
+        for (auto &p: t.midPoints) {
             midPoints.push_back(uvToEuler(p));
         }
         VectorCplx awv = configureAwv(dist, beamPoints);
         smoothWeights(awv, dist, midPoints, t.syncs);
         WeightsVector wv;
         for (int i = 0; i < awv.rows(); i++) {
-            cplx val = awv.coeff(i,0);
+            cplx val = awv.coeff(i, 0);
             wv.push_back(std::complex<float>(val));
         }
-        (*outfile) << std::endl << "BEAMPTS" << std::endl;
-        for (auto &p : t.beamPoints) {
+        (*outfile) << std::endl
+                   << "BEAMPTS" << std::endl;
+        for (auto &p: t.beamPoints) {
             (*outfile) << p << ",";
         }
         (*outfile) << std::endl;
@@ -239,24 +240,142 @@ namespace ns3 {
             Pose fromPose = GetPose(fromNodeIdx, timeIdx);
             Pose toPose = GetPose(toNodeIdx, timeIdx);
 
-            Euler fromDir = fromPose.second;
-            Eigen::Quaterniond fromQuat = EulerToQuat(fromDir);
+            dirs.push_back(getDirBetween(fromPose, toPose));
+        }
+        return dirs;
+    }
+//    std::vector<Vector3D> CoVRage::GetDirections(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
+//
+//        int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
+//        timeIdxStart = std::max(0, timeIdxStart);
+//        int timeIdxStop = std::floor(timeEnd.GetSeconds() / interval.GetSeconds());
+//
+//        std::vector<Vector3D> dirs;
+//        for (int timeIdx = timeIdxStart; timeIdx <= timeIdxStop; timeIdx++) {
+//            Pose fromPose = GetPose(fromNodeIdx, timeIdx);
+//            Pose toPose = GetPose(toNodeIdx, timeIdx);
+//
+//            Euler fromDir = fromPose.second;
+//            Eigen::Quaterniond fromQuat = EulerToQuat(fromDir);
+//
+//            Vector3D diffVec = toPose.first - fromPose.first;
+//            Eigen::Vector3d diffVecEigen(diffVec.x, diffVec.y, diffVec.z);
+//            diffVecEigen.normalize();
+//            Eigen::Vector3d finalVec = fromQuat.inverse() * diffVecEigen;
+//            dirs.push_back(Vector3D(finalVec.x(), finalVec.y(), finalVec.z()));
+//        }
+//        return dirs;
+//    }
 
-            Vector3D diffVec = toPose.first - fromPose.first;
-            Eigen::Vector3d diffVecEigen(diffVec.x, diffVec.y, diffVec.z);
-            diffVecEigen.normalize();
-            Eigen::Vector3d finalVec = fromQuat.inverse() * diffVecEigen;
-            dirs.push_back(Vector3D(finalVec.x(), finalVec.y(), finalVec.z()));
+
+    std::vector<Vector3D> CoVRage::GetDirectionsPredict(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
+        if (timeStart >= Simulator::Now() || timeEnd <= Simulator::Now()) {
+            throw std::runtime_error("Prediction range should include current time");
+        }
+        int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
+        timeIdxStart = std::max(0, timeIdxStart);
+        int timeIdxStop = std::floor(timeEnd.GetSeconds() / interval.GetSeconds());
+        int timeIdxNow = std::floor(Simulator::Now().GetSeconds() / interval.GetSeconds());
+
+        Pose fromPoseInit = GetPose(fromNodeIdx, timeIdxStart);
+        Pose toPoseInit = GetPose(toNodeIdx, timeIdxStart);
+        Pose fromPoseNow = GetPose(fromNodeIdx, timeIdxNow);
+        Pose toPoseNow = GetPose(toNodeIdx, timeIdxNow);
+
+        Vector3D dirInit = getDirBetween(fromPoseInit, toPoseInit);
+        Vector3D dirNow = getDirBetween(fromPoseNow, toPoseNow);
+        Eigen::Vector3d dirNowEigen(dirNow.x, dirNow.y, dirNow.z);
+
+        Eigen::Quaterniond extrap_start = VecToQuat(getDirBetween(fromPoseInit, toPoseInit));
+        Eigen::Quaterniond rot = VecToQuat(dirNow) * VecToQuat(dirInit).conjugate();
+
+        std::vector<Vector3D> dirs;
+        for (int timeIdx = timeIdxStart; timeIdx <= timeIdxStop; timeIdx++) {
+            if (false && timeIdx <= timeIdxNow) {
+                Pose fromPose = GetPose(fromNodeIdx, timeIdx);
+                Pose toPose = GetPose(toNodeIdx, timeIdx);
+
+                dirs.push_back(getDirBetween(fromPose, toPose));
+            } else {
+                double extrap_dist = (timeIdx - timeIdxNow) / (double)(timeIdxNow - timeIdxStart);
+                extrap_dist += 1;
+                Eigen::Quaterniond intermediate_q = extrap_start;
+                while (extrap_dist > 0) {
+                    double thisStep = (extrap_dist - std::floor(extrap_dist));
+                    if (thisStep == 0) thisStep = 1.0;
+                    intermediate_q = intermediate_q.slerp(thisStep, rot * intermediate_q);
+                    extrap_dist -= thisStep;
+
+                }
+                Eigen::Vector3d extrap_dir = intermediate_q * Eigen::Vector3d(1,0,0);
+                dirs.push_back(Vector3D(extrap_dir.x(), extrap_dir.y(), extrap_dir.z()));
+            }
         }
         return dirs;
     }
 
-    void CoVRage::SetOutfile(std::ofstream* outfile) {
+    std::vector<Vector3D> CoVRage::GetDirectionsPredict2(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
+        if (timeStart >= Simulator::Now() || timeEnd <= Simulator::Now()) {
+            throw std::runtime_error("Prediction range should include current time");
+        }
+        int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
+        timeIdxStart = std::max(0, timeIdxStart);
+        int timeIdxStop = std::floor(timeEnd.GetSeconds() / interval.GetSeconds());
+        int timeIdxNow = std::floor(Simulator::Now().GetSeconds() / interval.GetSeconds());
+
+        Pose fromPoseInit = GetPose(fromNodeIdx, timeIdxStart);
+        Pose toPoseInit = GetPose(toNodeIdx, timeIdxStart);
+        Pose fromPoseNow = GetPose(fromNodeIdx, timeIdxNow);
+        Pose toPoseNow = GetPose(toNodeIdx, timeIdxNow);
+
+//        Vector3D dirInit = getDirBetween(fromPoseInit, toPoseInit);
+        Vector3D dirNow = getDirBetween(fromPoseNow, toPoseNow);
+        std::cout << "EUL" <<QuatToEuler(VecToQuat(dirNow)) <<  "UV " << EulerToUv(QuatToEuler(VecToQuat(dirNow))) << std::endl;
+//        Eigen::Vector3d dirNowEigen(dirNow.x, dirNow.y, dirNow.z);
+
+        Eigen::Quaterniond extrap_start = EulerToQuat(fromPoseInit.second);//VecToQuat(getDirBetween(fromPoseInit, toPoseInit));
+        Eigen::Quaterniond rot = EulerToQuat(fromPoseNow.second) * EulerToQuat(fromPoseInit.second).conjugate();
+
+        Vector3D translate = fromPoseNow.first - fromPoseInit.first;
+
+        std::vector<Vector3D> dirs;
+        for (int timeIdx = timeIdxStart; timeIdx <= timeIdxStop; timeIdx++) {
+            if (false && timeIdx <= timeIdxNow) {
+                Pose fromPose = GetPose(fromNodeIdx, timeIdx);
+                Pose toPose = GetPose(toNodeIdx, timeIdx);
+
+                dirs.push_back(getDirBetween(fromPose, toPose));
+            } else {
+                double extrap_dist = (timeIdx - timeIdxNow) / (double)(timeIdxNow - timeIdxStart);
+                extrap_dist += 1;
+                double rot_remaining_dist = extrap_dist;
+                Eigen::Quaterniond intermediate_q = extrap_start;
+                while (rot_remaining_dist > 0) {
+                    double thisStep = (rot_remaining_dist - std::floor(rot_remaining_dist));
+                    if (thisStep == 0) thisStep = 1.0;
+                    intermediate_q = intermediate_q.slerp(thisStep, rot * intermediate_q);
+                    rot_remaining_dist -= thisStep;
+
+                }
+
+                Vector3D curPos = fromPoseInit.first + (translate * extrap_dist);
+
+                Pose curPose;
+                curPose.first = curPos;
+                curPose.second = QuatToEuler(intermediate_q);
+                Vector3D curDir = getDirBetween(curPose, toPoseNow);
+
+                dirs.push_back(curDir);
+            }
+        }
+        return dirs;
+    }
+    void CoVRage::SetOutfile(std::ofstream *outfile) {
         this->outfile = outfile;
     }
 
 
-    void CoVRage::InitializePoseVecs () {
+    void CoVRage::InitializePoseVecs() {
         int nodeIdx = 0;
         while (true) {
             std::string posFilename;
@@ -305,7 +424,7 @@ namespace ns3 {
                 }
 
                 if (!rotFile.eof() || rotLine.size() > 4) {
-                    stream = std::istringstream (rotLine);
+                    stream = std::istringstream(rotLine);
                     std::getline(stream, val, ',');
                     pose.second.yaw = std::stod(val);// + M_PI/2.0;
                     std::getline(stream, val, ',');
@@ -323,9 +442,7 @@ namespace ns3 {
                 }
             }
             nodeIdx++;
-
         }
-
     }
 
     Eigen::MatrixXi CoVRage::combineDist(const Eigen::MatrixXi &dist, const std::vector<int> &mapping) {
@@ -415,7 +532,7 @@ namespace ns3 {
             beamMap(3, 3) = -1;
         } else if (isHor && !isTight) {
             if (diag == NODIAG) {
-                beamMap(0, 0) = 0; //HOR
+                beamMap(0, 0) = 0;//HOR
                 beamMap(0, 1) = 2;
                 beamMap(0, 2) = 4;
                 beamMap(0, 3) = 6;
@@ -491,11 +608,10 @@ namespace ns3 {
         for (int i = 0; i < beamVec.cols(); i++) {
             t.beamMapping.push_back(beamVec(i));
         }
-
     }
 
     Eigen::MatrixXi CoVRage::configureInterleavedRect(Dims dims, Dims subarrsPerBlock, bool isHor, bool isTight, DiagType diag) {
-        if (! (subarrsPerBlock.width ==2  && subarrsPerBlock.height == 2)) {
+        if (!(subarrsPerBlock.width == 2 && subarrsPerBlock.height == 2)) {
             std::cout << "Bad subarr config, spacing violation" << std::endl;
         }
         Eigen::MatrixXi dist(dims.width, dims.height);
@@ -503,9 +619,9 @@ namespace ns3 {
 
         for (int x = 0; x < dims.width; x++) {
             for (int y = 0; y < dims.height; y++) {
-                int xBlockIdx = x / blockSize.width; //Rounds down
+                int xBlockIdx = x / blockSize.width;//Rounds down
                 int xSubarrIdx = x % blockSize.width % subarrsPerBlock.width;
-                int yBlockIdx = y / blockSize.height; //Rounds down
+                int yBlockIdx = y / blockSize.height;//Rounds down
                 int ySubarrIdx = y % blockSize.height % subarrsPerBlock.height;
                 dist(x, y) = (yBlockIdx * subarrsPerBlock.height + ySubarrIdx) +
                              ((xBlockIdx * subarrsPerBlock.width + xSubarrIdx) * subarrsPerBlock.height * blocks.height);
@@ -518,7 +634,6 @@ namespace ns3 {
                             } else if (dist(x, y) >= 8) {
                                 dist(x, y) -= 8;
                             }
-
                         }
                     } else if (diag == INBETWEEN || diag == DIAG) {
                         if (dist(x, y) == 1 && y < 16) {
@@ -547,7 +662,8 @@ namespace ns3 {
                                 dist(x, y) = 2;
                             } else if (dist(x, y) == 10 && x >= 48) {
                                 dist(x, y) = -1;
-                            }                    }
+                            }
+                        }
                     }
 
                 } else if (!isTight && isHor) {
@@ -589,45 +705,33 @@ namespace ns3 {
                             }
                         }
                     }
-                }
-                else if (isTight && isHor) {
+                } else if (isTight && isHor) {
                     if (dist(x, y) == 4 && x < 16) {
-                        dist(x,y) = -1;
+                        dist(x, y) = -1;
+                    } else if (dist(x, y) == 7 && x < 16) {
+                        dist(x, y) = -1;
+                    } else if (dist(x, y) == 12 && x < 48) {
+                        dist(x, y) = 4;
+                    } else if (dist(x, y) == 15 && x < 48) {
+                        dist(x, y) = 7;
+                    } else if (dist(x, y) == 12 && x >= 48) {
+                        dist(x, y) = -1;
+                    } else if (dist(x, y) == 15 && x >= 48) {
+                        dist(x, y) = -1;
                     }
-                    else if (dist(x, y) == 7 && x < 16) {
-                        dist(x,y) = -1;
-                    }
-                    else if (dist(x, y) == 12 && x < 48) {
-                        dist(x,y) = 4;
-                    }
-                    else if (dist(x, y) == 15 && x < 48) {
-                        dist(x,y) = 7;
-                    }
-                    else if (dist(x, y) == 12 && x >= 48) {
-                        dist(x,y) = -1;
-                    }
-                    else if (dist(x, y) == 15 && x >= 48) {
-                        dist(x,y) = -1;
-                    }
-                }
-                else if (isTight && !isHor) {
+                } else if (isTight && !isHor) {
                     if (dist(x, y) == 1 && y < 16) {
-                        dist(x,y) = -1;
-                    }
-                    else if (dist(x, y) == 13 && y < 16) {
-                        dist(x,y) = -1;
-                    }
-                    else if (dist(x, y) == 3 && y < 48) {
-                        dist(x,y) = 1;
-                    }
-                    else if (dist(x, y) == 15 && y < 48) {
-                        dist(x,y) = 13;
-                    }
-                    else if (dist(x, y) == 3 && y >= 48) {
-                        dist(x,y) = -1;
-                    }
-                    else if (dist(x, y) == 15 && y >= 48) {
-                        dist(x,y) = -1;
+                        dist(x, y) = -1;
+                    } else if (dist(x, y) == 13 && y < 16) {
+                        dist(x, y) = -1;
+                    } else if (dist(x, y) == 3 && y < 48) {
+                        dist(x, y) = 1;
+                    } else if (dist(x, y) == 15 && y < 48) {
+                        dist(x, y) = 13;
+                    } else if (dist(x, y) == 3 && y >= 48) {
+                        dist(x, y) = -1;
+                    } else if (dist(x, y) == 15 && y >= 48) {
+                        dist(x, y) = -1;
                     }
                 }
             }
@@ -640,8 +744,8 @@ namespace ns3 {
         int ctr = 0;
         for (int x = 0; x < dims.width; x++) {
             for (int y = 0; y < dims.height; y++) {
-                ElLoc loc = ElLoc(x - ((dims.width-1)/2),y - ((dims.height-1)/2));
-//                ElLoc loc = ElLoc(x,y);
+                ElLoc loc = ElLoc(x - ((dims.width - 1) / 2), y - ((dims.height - 1) / 2));
+                //                ElLoc loc = ElLoc(x,y);
                 cplx steer(0.0, calcSteervecEl(euler, loc));
                 cplx val = std::pow(M_E, steer);
                 m(ctr) = val;
@@ -656,7 +760,7 @@ namespace ns3 {
         return m;
     }
 
-    VectorCplx CoVRage::configureAwv(Eigen::MatrixXi dist, const std::vector<Euler>& eulers) {
+    VectorCplx CoVRage::configureAwv(Eigen::MatrixXi dist, const std::vector<Euler> &eulers) {
         std::vector<VectorCplx> weightssets;
         for (size_t idx = 0; idx < eulers.size(); idx++) {
             weightssets.push_back(calcSteervec(eulers[idx], dims));
@@ -666,7 +770,7 @@ namespace ns3 {
         int ctr = 0;
         for (int x = 0; x < dims.width; x++) {
             for (int y = 0; y < dims.height; y++) {
-                if (dist(x,y) >= 0) {
+                if (dist(x, y) >= 0) {
                     awv(ctr) = weightssets[dist(x, y)](ctr);
                 }
                 ctr++;
@@ -676,16 +780,16 @@ namespace ns3 {
     }
 
 
-    void CoVRage::smoothWeights(VectorCplx& awv, const Eigen::MatrixXi& dist, const std::vector<Euler>& midPoints, const std::vector<int>& syncs) {
+    void CoVRage::smoothWeights(VectorCplx &awv, const Eigen::MatrixXi &dist, const std::vector<Euler> &midPoints, const std::vector<int> &syncs) {
 
-        int subarrs = dist.maxCoeff() +1;
-        for (int idx = 0; idx < subarrs-1; idx++) {
-            int syncee = idx+1;
+        int subarrs = dist.maxCoeff() + 1;
+        for (int idx = 0; idx < subarrs - 1; idx++) {
+            int syncee = idx + 1;
             int syncer = syncs[idx];
             if (syncer < 0) {
                 continue;
             }
-            const Euler& midPoint = midPoints[idx];
+            const Euler &midPoint = midPoints[idx];
             VectorCplx steerVec = calcSteervec(midPoint, dims);
             MatrixXb selection1 = (dist.array()).cwiseEqual(syncee);
             Eigen::MatrixXcd subWeights1 = fillFrom(awv, selection1);
@@ -699,7 +803,7 @@ namespace ns3 {
             cplx mod2 = (steerVec2.conjugate().transpose() * subWeights2)(0);
             double phase2 = std::arg(mod2);
 
-            multiplyWhere(awv, selection1, 1.0 / (std::exp(cplx(0.0, (phase1-phase2)))));
+            multiplyWhere(awv, selection1, 1.0 / (std::exp(cplx(0.0, (phase1 - phase2)))));
         }
     }
 
@@ -707,25 +811,37 @@ namespace ns3 {
         return std::sin(0.886 / (elCount * SPACING));
     }
 
+
+    Vector3D CoVRage::getDirBetween(const Pose &from, const Pose &to) {
+        Euler fromDir = from.second;
+        Eigen::Quaterniond fromQuat = EulerToQuat(fromDir);
+
+        Vector3D diffVec = to.first - from.first;
+        Eigen::Vector3d diffVecEigen(diffVec.x, diffVec.y, diffVec.z);
+        diffVecEigen.normalize();
+        Eigen::Vector3d finalVec = fromQuat.inverse() * diffVecEigen;
+        return Vector3D(finalVec.x(), finalVec.y(), finalVec.z());
+    }
+
     Eigen::Quaterniond VecToQuat(const Vector3D &vec) {
-//        Vector3D normVec = vec /  vec.GetLength();
-//
-//        double cos_theta = normVec.y;
-//        double theta = std::acos(cos_theta);
-//        double w = std::cos(theta / 2);
-//        double sin_theta_over_2 = std:: sin(theta / 2);
-//        double x = normVec.x * sin_theta_over_2;
-//        double y = normVec.y * sin_theta_over_2;
-//        double z = normVec.z * sin_theta_over_2;
-//        return Eigen::Quaterniond(w,x,y,z);
-        Eigen::Vector3d toVec(vec.x,vec.y,vec.z);
-        Eigen::Vector3d fromVec(1,0,0);
+        //        Vector3D normVec = vec /  vec.GetLength();
+        //
+        //        double cos_theta = normVec.y;
+        //        double theta = std::acos(cos_theta);
+        //        double w = std::cos(theta / 2);
+        //        double sin_theta_over_2 = std:: sin(theta / 2);
+        //        double x = normVec.x * sin_theta_over_2;
+        //        double y = normVec.y * sin_theta_over_2;
+        //        double z = normVec.z * sin_theta_over_2;
+        //        return Eigen::Quaterniond(w,x,y,z);
+        Eigen::Vector3d toVec(vec.x, vec.y, vec.z);
+        Eigen::Vector3d fromVec(1, 0, 0);
 
         //        std::cout << "FROMTO" << fromVec << " " <<toVec << std::endl;
         return Eigen::Quaterniond::FromTwoVectors(fromVec, toVec);
     }
 
-    Eigen::Quaterniond EulerToQuat(const Euler& euler) {
+    Eigen::Quaterniond EulerToQuat(const Euler &euler) {
         double cr = std::cos(euler.roll * 0.5);
         double sr = std::sin(euler.roll * 0.5);
         double cp = std::cos(euler.pitch * 0.5);
@@ -734,8 +850,8 @@ namespace ns3 {
         double sy = std::sin(euler.yaw * 0.5);
 
         //Pitch axis points left
-        double w =  cy * cr * cp + sy * sr * sp;
-        double x =  cy * sr * cp + sy * cr * sp;
+        double w = cy * cr * cp + sy * sr * sp;
+        double x = cy * sr * cp + sy * cr * sp;
         double y = -cy * cr * sp + sy * sr * cp;
         double z = -cy * sr * sp + sy * cr * cp;
         return Eigen::Quaterniond(w, x, y, z);
@@ -756,7 +872,7 @@ namespace ns3 {
         double b = q.y() + q.z() * sign;
         double c = q.x() + q.w();
         double d = q.z() * sign - q.y();
-//        std::cout << "abcd" << a << " " << b << " " << c << " " << d << std::endl;
+        //        std::cout << "abcd" << a << " " << b << " " << c << " " << d << std::endl;
 
         eul.roll = 2 * std::atan2(std::hypot(c, d), std::hypot(a, b));
 
@@ -798,50 +914,31 @@ namespace ns3 {
         else if (eul.pitch > M_PI)
             eul.pitch -= 2 * M_PI;
 
-        eul.pitch *= -1; //Pitch axis points left
+        eul.pitch *= -1;//Pitch axis points left
 
         if (thecase != 0) {
             std::cout << "GIMBAL LOCK" << std::endl;
         }
         return eul;
-
-        //
-//        //OK
-//        Euler eul;
-//        // roll (x-axis rotation)
-//        double sinr_cosp = 2 * (q.w() * q.x() + q.y() * q.z());
-//        double cosr_cosp = 1 - 2 * (q.x() * q.x() + q.y() * q.y());
-//        eul.roll = std::atan2(sinr_cosp, cosr_cosp);
-//
-//        // pitch (y-axis rotation)
-//        double sinp = std::sqrt(1 + 2 * (q.w() * q.y() - q.x() * q.z()));
-//        double cosp = std::sqrt(1 - 2 * (q.w() * q.y() - q.x() * q.z()));
-//        eul.pitch = 2 * std::atan2(sinp, cosp) - M_PI / 2;
-//
-//        // yaw (z-axis rotation)
-//        double siny_cosp = 2 * (q.w() * q.z() + q.x() * q.y());
-//        double cosy_cosp = 1 - 2 * (q.y() * q.y() + q.z() * q.z());
-//        eul.yaw = std::atan2(siny_cosp, cosy_cosp);
-//        return eul;
     }
 
 
-    UV EulerToUv(const Euler& eul) {
-        return UV(std::cos(eul.pitch)*std::sin(eul.yaw), std::sin(eul.pitch));
+    UV EulerToUv(const Euler &eul) {
+        return UV(std::cos(eul.pitch) * std::sin(eul.yaw), std::sin(eul.pitch));
     }
 
-    Euler uvToEuler(const UV& uv) {
-        return Euler(std::atan2(uv.u, sqrt(1 - std::pow(uv.u, 2) - std::pow(uv.v, 2))),0, std::asin(uv.v));
+    Euler uvToEuler(const UV &uv) {
+        return Euler(std::atan2(uv.u, sqrt(1 - std::pow(uv.u, 2) - std::pow(uv.v, 2))), 0, std::asin(uv.v));
     }
 
-    VectorCplx fillFrom(const VectorCplx& source, const MatrixXb& selection) {
+    VectorCplx fillFrom(const VectorCplx &source, const MatrixXb &selection) {
         int resultSize = selection.count();
         VectorCplx result(resultSize);
         int resultIdx = 0;
         for (int xSource = 0; xSource < selection.cols(); xSource++) {
             for (int ySource = 0; ySource < selection.rows(); ySource++) {
-                if (selection(xSource,ySource) == true) {
-                    result(resultIdx) = source(xSource*selection.cols()+ySource);
+                if (selection(xSource, ySource) == true) {
+                    result(resultIdx) = source(xSource * selection.cols() + ySource);
                     resultIdx++;
                 }
             }
@@ -850,17 +947,17 @@ namespace ns3 {
         return result;
     }
 
-    void multiplyWhere(VectorCplx& v, const MatrixXb& selection, cplx multiplier) {
+    void multiplyWhere(VectorCplx &v, const MatrixXb &selection, cplx multiplier) {
         for (int xSource = 0; xSource < selection.cols(); xSource++) {
             for (int ySource = 0; ySource < selection.rows(); ySource++) {
-                if (selection(xSource,ySource) == true) {
-                    v(xSource*selection.cols()+ySource) *= multiplier;
+                if (selection(xSource, ySource) == true) {
+                    v(xSource * selection.cols() + ySource) *= multiplier;
                 }
             }
         }
     }
 
-    VectorCplx normalize(const VectorCplx& vec) {
+    VectorCplx normalize(const VectorCplx &vec) {
         return vec * 1 / sqrt(vec.size());
     }
 
