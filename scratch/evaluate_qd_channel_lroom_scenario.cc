@@ -107,7 +107,9 @@ std::map<Time, uint> pktsPerBurstRcvd;
 std::map<Time, Time> latestPerBurstRcvd;
 
 string beamforming = "covrage";
+string prediction = "device";
 string directory = "";
+string motion = "mixed";
 
 std::ofstream tputfile;
 
@@ -327,12 +329,14 @@ main (int argc, char *argv[])
   cmd.AddValue ("txSize", "Tx array size (Small/Big)", txSize);
   cmd.AddValue ("rxSize", "Rx array size (Small/Big)", rxSize);
   cmd.AddValue ("beamforming", "Rx beamforming type (covrage/sectors/none)", beamforming);
+  cmd.AddValue ("prediction", "Future direction prediction method (device/model/oracle)", prediction);
   cmd.AddValue ("fps", "Frames per second transmitted", fps);
+  cmd.AddValue ("motion", "Motion level (low/mixed/high)", motion);
 
 
   cmd.Parse (argc, argv);
-
-  directory = "output/bf_" + beamforming + "_tx_" + txSize + "_rx_" + rxSize + "_fps_" + to_string(fps) + "_data_" + dataRate + "_mob_" + to_string(enableMobility) + "/";
+  directory = "output/bf_" + beamforming + "_" + prediction + "_tx_" + txSize + "_rx_" + rxSize
+              + "_fps_" + to_string(fps) + "_data_" + dataRate + "_motion_" + motion + "/";
   SystemPath::MakeDirectories(directory);
   tputfile = std::ofstream(directory + "throughput");
   auto standard = WIFI_PHY_STANDARD_80211ay;
@@ -364,7 +368,7 @@ main (int argc, char *argv[])
   Ptr<MultiModelSpectrumChannel> spectrumChannel = CreateObject<MultiModelSpectrumChannel> ();
   qdPropagationEngine = CreateObject<QdPropagationEngine> ();
 //  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("WigigFiles/QdChannel/L-ShapedRoom/"));
-  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("../qd-realization/src/examples/BoxLectureRoom/Output/Ns3/"));
+  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("../qd-realization/src/examples/BoxLectureRoom" + motion + "/Output/Ns3/"));
   //  qdPropagationEngine->SetAttribute ("QDModelFolder", StringValue ("/mnt/windows/Users/user/"));
 
 
@@ -378,7 +382,8 @@ main (int argc, char *argv[])
     {
       qdPropagationEngine->SetAttribute ("Interval", TimeValue (interval));
     }
-   covrage = new CoVRage("../qd-realization/src/examples/BoxLectureRoom/Input/", interval);
+   PredictionType predType = prediction == "device" ? PredictionType::DEVICE : prediction == "model" ? PredictionType::MODEL : prediction == "oracle" ? PredictionType::ORACLE : PredictionType::UNDEFINED;
+   covrage = new CoVRage("../qd-realization/src/examples/BoxLectureRoom" + motion + "/Input/", interval, predType);
 
    std::ofstream outfile(directory + "CoVRage.txt");
    covrage->SetOutfile(&outfile);

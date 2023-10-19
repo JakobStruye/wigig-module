@@ -5,6 +5,8 @@
 #include "covrage.h"
 #include "ns3/core-module.h"
 
+#include <cmath>
+
 namespace ns3 {
 
     Euler::Euler() : yaw(0), roll(0), pitch(0) {}
@@ -49,11 +51,27 @@ namespace ns3 {
 
     ElLoc::ElLoc(double x, double y) : x(x), y(y) {}
 
-    CoVRage::CoVRage(std::string poseFolder, Time interval) : poseFolder(poseFolder), interval(interval) {
+    CoVRage::CoVRage(std::string poseFolder, Time interval, PredictionType predType) : poseFolder(poseFolder), interval(interval), predType(predType) {
     }
 
     WeightsVector CoVRage::GetWeights() {
-        std::vector<Vector3D> dirs = GetDirections(1, 0, Simulator::Now() - Seconds(0.05), Simulator::Now() + Seconds(0.15));
+        Time fromTime = Simulator::Now() - Seconds(0.05);
+        Time toTime = Simulator::Now() + Seconds(0.15);
+        std::vector<Vector3D> dirs;
+        switch (predType) {
+            case DEVICE:
+                dirs = GetDirectionsPredictDevice(1,0,fromTime, toTime);
+                break;
+            case MODEL:
+                dirs = GetDirectionsPredictModel(1,0,fromTime, toTime);
+                break;
+            case ORACLE:
+                dirs = GetDirectionsOracle(1,0,fromTime, toTime);
+                break;
+            case UNDEFINED:
+            default:
+                throw std::runtime_error("Bad prediction type");
+        }
 
         Vector3D &fromDir = dirs.front();
         Vector3D &toDir = dirs.back();
@@ -77,14 +95,14 @@ namespace ns3 {
             Eigen::Quaterniond thisFrom = VecToQuat(dirs[idx]);
             Eigen::Quaterniond thisTo = VecToQuat(dirs[idx + 1]);
             double thisProgress = (progress * (dirs.size() - 1)) - idx;
-
             Eigen::Quaterniond newPt = thisFrom.slerp(thisProgress, thisTo);
             pointsEul.push_back(QuatToEuler(newPt));
             pts.push_back(EulerToUv(pointsEul.back()));
             if (pts.size() > 1 && !pts[pts.size() - 1].isNearEdge() && !pts[pts.size() - 2].isNearEdge()) {
                 double dist = pts[pts.size() - 1].dist(pts[pts.size() - 2]);
                 rotLen += dist;
-                step *= (targetDist / dist);
+                step *= std::min(targetDist / dist, 2.0);
+
             }
             progress += step;
         }
@@ -229,7 +247,7 @@ namespace ns3 {
         return m_poseVecs[nodeIdx][timeIdx];
     }
 
-    std::vector<Vector3D> CoVRage::GetDirections(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
+    std::vector<Vector3D> CoVRage::GetDirectionsOracle(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
 
         int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
         timeIdxStart = std::max(0, timeIdxStart);
@@ -267,8 +285,7 @@ namespace ns3 {
 //        return dirs;
 //    }
 
-
-    std::vector<Vector3D> CoVRage::GetDirectionsPredict(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
+    std::vector<Vector3D> CoVRage::GetDirectionsPredictModel(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
         if (timeStart >= Simulator::Now() || timeEnd <= Simulator::Now()) {
             throw std::runtime_error("Prediction range should include current time");
         }
@@ -278,60 +295,8 @@ namespace ns3 {
         int timeIdxNow = std::floor(Simulator::Now().GetSeconds() / interval.GetSeconds());
 
         Pose fromPoseInit = GetPose(fromNodeIdx, timeIdxStart);
-        Pose toPoseInit = GetPose(toNodeIdx, timeIdxStart);
         Pose fromPoseNow = GetPose(fromNodeIdx, timeIdxNow);
         Pose toPoseNow = GetPose(toNodeIdx, timeIdxNow);
-
-        Vector3D dirInit = getDirBetween(fromPoseInit, toPoseInit);
-        Vector3D dirNow = getDirBetween(fromPoseNow, toPoseNow);
-        Eigen::Vector3d dirNowEigen(dirNow.x, dirNow.y, dirNow.z);
-
-        Eigen::Quaterniond extrap_start = VecToQuat(getDirBetween(fromPoseInit, toPoseInit));
-        Eigen::Quaterniond rot = VecToQuat(dirNow) * VecToQuat(dirInit).conjugate();
-
-        std::vector<Vector3D> dirs;
-        for (int timeIdx = timeIdxStart; timeIdx <= timeIdxStop; timeIdx++) {
-            if (false && timeIdx <= timeIdxNow) {
-                Pose fromPose = GetPose(fromNodeIdx, timeIdx);
-                Pose toPose = GetPose(toNodeIdx, timeIdx);
-
-                dirs.push_back(getDirBetween(fromPose, toPose));
-            } else {
-                double extrap_dist = (timeIdx - timeIdxNow) / (double)(timeIdxNow - timeIdxStart);
-                extrap_dist += 1;
-                Eigen::Quaterniond intermediate_q = extrap_start;
-                while (extrap_dist > 0) {
-                    double thisStep = (extrap_dist - std::floor(extrap_dist));
-                    if (thisStep == 0) thisStep = 1.0;
-                    intermediate_q = intermediate_q.slerp(thisStep, rot * intermediate_q);
-                    extrap_dist -= thisStep;
-
-                }
-                Eigen::Vector3d extrap_dir = intermediate_q * Eigen::Vector3d(1,0,0);
-                dirs.push_back(Vector3D(extrap_dir.x(), extrap_dir.y(), extrap_dir.z()));
-            }
-        }
-        return dirs;
-    }
-
-    std::vector<Vector3D> CoVRage::GetDirectionsPredict2(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
-        if (timeStart >= Simulator::Now() || timeEnd <= Simulator::Now()) {
-            throw std::runtime_error("Prediction range should include current time");
-        }
-        int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
-        timeIdxStart = std::max(0, timeIdxStart);
-        int timeIdxStop = std::floor(timeEnd.GetSeconds() / interval.GetSeconds());
-        int timeIdxNow = std::floor(Simulator::Now().GetSeconds() / interval.GetSeconds());
-
-        Pose fromPoseInit = GetPose(fromNodeIdx, timeIdxStart);
-        Pose toPoseInit = GetPose(toNodeIdx, timeIdxStart);
-        Pose fromPoseNow = GetPose(fromNodeIdx, timeIdxNow);
-        Pose toPoseNow = GetPose(toNodeIdx, timeIdxNow);
-
-//        Vector3D dirInit = getDirBetween(fromPoseInit, toPoseInit);
-        Vector3D dirNow = getDirBetween(fromPoseNow, toPoseNow);
-        std::cout << "EUL" <<QuatToEuler(VecToQuat(dirNow)) <<  "UV " << EulerToUv(QuatToEuler(VecToQuat(dirNow))) << std::endl;
-//        Eigen::Vector3d dirNowEigen(dirNow.x, dirNow.y, dirNow.z);
 
         Eigen::Quaterniond extrap_start = EulerToQuat(fromPoseInit.second);//VecToQuat(getDirBetween(fromPoseInit, toPoseInit));
         Eigen::Quaterniond rot = EulerToQuat(fromPoseNow.second) * EulerToQuat(fromPoseInit.second).conjugate();
@@ -370,6 +335,49 @@ namespace ns3 {
         }
         return dirs;
     }
+
+    std::vector<Vector3D> CoVRage::GetDirectionsPredictDevice(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd) {
+
+
+        int timeIdxStart = std::floor(timeStart.GetSeconds() / interval.GetSeconds());
+        timeIdxStart = std::max(0, timeIdxStart);
+        int timeIdxStop = std::floor(timeEnd.GetSeconds() / interval.GetSeconds());
+        int timeIdxNow = std::floor(Simulator::Now().GetSeconds() / interval.GetSeconds());
+        //Jump per three
+        timeIdxStart += (timeIdxNow - timeIdxStart)%3;
+        timeIdxStop -= (timeIdxStop - timeIdxNow)%3;
+
+        std::vector<Vector3D> dirs;
+        for (int timeIdx = timeIdxStart; timeIdx <= timeIdxNow; timeIdx+=3) {
+            Pose fromPose = GetPose(fromNodeIdx, timeIdx);
+            Pose toPose = GetPose(toNodeIdx, timeIdx);
+
+            dirs.push_back(getDirBetween(fromPose, toPose));
+        }
+        Pose fromPoseInit = GetPose(fromNodeIdx, timeIdxStart);
+
+        int predIdx = 0;
+        Pose fromPoseNow = GetPose(fromNodeIdx, timeIdxNow);
+        Pose toPoseNow = GetPose(toNodeIdx, timeIdxNow);
+
+        Vector3D translate = fromPoseNow.first - fromPoseInit.first;
+        for (int timeIdx = timeIdxNow+3; timeIdx <= timeIdxStop; timeIdx+=3) {
+            double extrap_dist = (timeIdx - timeIdxNow) / (double)(timeIdxNow - timeIdxStart);
+            extrap_dist += 1;
+            if (std::isinf(extrap_dist)) {
+                extrap_dist = 1;
+            }
+            Vector3D curPos = fromPoseInit.first + (translate * extrap_dist);
+            Pose curPose;
+            curPose.first = curPos;
+            curPose.second = m_rotPreds[timeIdxNow][predIdx];
+            Vector3D curDir = getDirBetween(curPose, toPoseNow);
+            dirs.push_back(curDir);
+            predIdx += 1;
+        }
+        return dirs;
+    }
+
     void CoVRage::SetOutfile(std::ofstream *outfile) {
         this->outfile = outfile;
     }
@@ -380,13 +388,15 @@ namespace ns3 {
         while (true) {
             std::string posFilename;
             std::string rotFilename;
-
+            std::string rotPredFilename;
 
             posFilename = std::string(poseFolder) + std::string("NodePosition") + std::to_string(nodeIdx) + std::string(".dat");
             rotFilename = std::string(poseFolder) + std::string("NodeRotation") + std::to_string(nodeIdx) + std::string(".dat");
+            rotPredFilename = std::string(poseFolder) + std::string("NodeRotationPred") + std::to_string(nodeIdx) + std::string(".dat");
 
             std::ifstream posFile;
             std::ifstream rotFile;
+            std::ifstream rotPredFile;
             posFile.open(posFilename.c_str(), std::ifstream::in);
             if (!posFile.good()) {
                 break;
@@ -395,7 +405,9 @@ namespace ns3 {
             if (!rotFile.good()) {
                 NS_FATAL_ERROR("Position found, rotation not found");
             }
+            rotPredFile.open(rotPredFilename.c_str(), std::ifstream::in);
             m_poseVecs.push_back(PoseVec());
+            m_rotPreds.push_back(Eulers());
             std::string val;
             bool isFirst = true;
             Euler firstRot;
@@ -404,9 +416,11 @@ namespace ns3 {
             while (true) {
                 std::string posLine;
                 std::string rotLine;
+                std::string rotPredLine;
                 Pose pose;
                 std::getline(posFile, posLine);
                 std::getline(rotFile, rotLine);
+                std::getline(rotPredFile, rotPredLine);
                 if (posFile.eof() && rotFile.eof()) {
                     break;
                 }
@@ -439,6 +453,27 @@ namespace ns3 {
                     firstPos = pose.first;
                     firstRot = pose.second;
                     isFirst = false;
+                }
+                if (rotPredFile.good()) {
+                    m_rotPreds.emplace_back();
+                    Eulers& euls = m_rotPreds.back();
+                    std::istringstream substream;
+                    stream = std::istringstream(rotPredLine);
+                    while (true) {
+                        std::getline(stream, val, ' ');
+                        if (val.size() < 5) {
+                            break;
+                        }
+                        substream = std::istringstream(val);
+                        euls.emplace_back();
+                        Euler &eul = euls.back();
+                        std::getline(substream, val, ',');
+                        eul.yaw = std::stod(val);// + M_PI/2.0;
+                        std::getline(substream, val, ',');
+                        eul.roll = std::stod(val);
+                        std::getline(substream, val, ',');
+                        eul.pitch = -1 * std::stod(val);
+                    }
                 }
             }
             nodeIdx++;
@@ -771,7 +806,10 @@ namespace ns3 {
         for (int x = 0; x < dims.width; x++) {
             for (int y = 0; y < dims.height; y++) {
                 if (dist(x, y) >= 0) {
-                    awv(ctr) = weightssets[dist(x, y)](ctr);
+                    //DON'T REMOVE SEPARATE weighstIdx VAR!! It has to be evaluated explicitly
+                    //otherwise the optimizer sometimes misbehaves!!
+                    int weightsIdx = dist(x, y);
+                    awv(ctr) = weightssets[weightsIdx](ctr);
                 }
                 ctr++;
             }

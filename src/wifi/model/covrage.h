@@ -73,9 +73,17 @@ namespace ns3 {
         ElLoc(double x, double y);
     };
 
+    enum PredictionType {
+        DEVICE,
+        MODEL,
+        ORACLE,
+        UNDEFINED
+    };
+
     typedef std::pair<Vector3D, Euler> Pose;
     typedef std::vector<Pose> PoseVec;
     typedef std::vector<PoseVec> PoseVecs;
+    typedef std::vector<Euler> Eulers;
     typedef std::complex<double> cplx;
     typedef Eigen::Matrix<cplx, Eigen::Dynamic, 1> VectorCplx;
     typedef Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> BeamMap;
@@ -86,12 +94,8 @@ namespace ns3 {
 
     class CoVRage {
     public:
-        CoVRage(std::string poseFolder, Time interval);
+        CoVRage(std::string poseFolder, Time interval, PredictionType predType);
         WeightsVector GetWeights();
-        std::vector<Vector3D> GetDirections(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
-        std::vector<Vector3D> GetDirectionsPredict(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
-        std::vector<Vector3D> GetDirectionsPredict2(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
-
 
         void SetOutfile(std::ofstream* outfile);
 
@@ -111,14 +115,21 @@ namespace ns3 {
 
         Vector3D getDirBetween(const Pose& from, const Pose& to);
 
+        std::vector<Vector3D> GetDirectionsOracle(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
+        std::vector<Vector3D> GetDirectionsPredictModel(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
+        std::vector<Vector3D> GetDirectionsPredictDevice(int fromNodeIdx, int toNodeIdx, Time timeStart, Time timeEnd);
+
         std::string poseFolder;
         Time interval;
         PoseVecs m_poseVecs;
+        std::vector<Eulers> m_rotPreds;
 
         Dims dims = Dims(64,64);
         Dims blocks = Dims(2,2);
 
         std::ofstream* outfile;
+        PredictionType predType;
+
     };
 
     Eigen::Quaterniond VecToQuat(const Vector3D& vec);
