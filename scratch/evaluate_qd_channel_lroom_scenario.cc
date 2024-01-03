@@ -102,14 +102,17 @@ bool csv = false;                         /* Enable CSV output. */
 /* Tracing */
 Ptr<QdPropagationEngine> qdPropagationEngine; /* Q-D Propagation Engine. */
 CoVRage* covrage;
+bool covrageRunning = false;
 
 std::map<Time, uint> pktsPerBurstRcvd;
 std::map<Time, Time> latestPerBurstRcvd;
 
-string beamforming = "covrage";
+string beamforming = "none";
 string prediction = "device";
 string directory = "";
-string motion = "mixed";
+string motion = "Mixed";
+string bhiConfig = "default";
+bool dtibf = true;
 
 std::ofstream tputfile;
 
@@ -147,25 +150,27 @@ SLSCompleted (Ptr<DmgWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
     }
 }
 
-//void
-//DoCovrage (void)
-//{
-//    if (beamforming == "covrage") {
-//      WeightsVector wv = covrage->GetWeights();
-//      staWifiMac->hijackTx(apWifiMac->GetAddress(), wv);
-//      qdPropagationEngine->ForceRecalc();
-//    }
-//
-//    Simulator::Schedule (MilliSeconds (1), &DoCovrage);
-//}
+void
+DoCovrage (void)
+{
+    if (beamforming == "covrage") {
+      WeightsVector wv = covrage->GetWeights();
+      staWifiMac->hijackTx(apWifiMac->GetAddress(), wv);
+      qdPropagationEngine->ForceRecalc();
+    }
+
+//    Simulator::Schedule (MilliSeconds (100), &DoCovrage);
+}
 
 void
 SLSCompletedSta (Ptr<DmgStaWifiMac> wifiMac, SlsCompletionAttrbitutes attributes)
 {
-    if (beamforming == "covrage") {
-      WeightsVector wv = covrage->GetWeights();
-      wifiMac->hijackTx(apWifiMac->GetAddress(), wv);
-      qdPropagationEngine->ForceRecalc();
+    if (!covrageRunning) {
+      covrageRunning = true;
+//      DoCovrage();
+    }
+    if (!dtibf) {
+        DoCovrage();
     }
     SLSCompleted(wifiMac, attributes);
 }
@@ -208,6 +213,27 @@ DataTransmissionIntervalStarted (Ptr<DmgApWifiMac> apWifiMac, Ptr<DmgStaWifiMac>
               cb->DisableTx();
           }
           apWifiMac->Perform_TXSS_TXOP (staWifiMac->GetAddress());
+          DoCovrage();
+          biCounter = 0;
+        }
+    }
+}
+
+void
+BeaconHeaderIntervalStarted (Ptr<DmgApWifiMac> apWifiMac, Ptr<DmgStaWifiMac> staWifiMac, Mac48Address address, Time)
+{
+    if (apWifiMac->GetWifiRemoteStationManager ()->IsAssociated (staWifiMac->GetAddress ()) > 0)
+    {
+        biCounter++;
+        if (biCounter == biThreshold)
+        {
+          if (beamforming != "sectors") {
+              Ptr<Codebook> cb = staWifiMac->GetCodebook();
+              cb->DisableTx();
+          }
+          staWifiMac->RequestRetrain();
+          apWifiMac->clearSnrMap(staWifiMac->GetAddress ());
+          staWifiMac->clearSnrMap(apWifiMac->GetAddress ());
           biCounter = 0;
         }
     }
@@ -332,11 +358,14 @@ main (int argc, char *argv[])
   cmd.AddValue ("prediction", "Future direction prediction method (device/model/oracle)", prediction);
   cmd.AddValue ("fps", "Frames per second transmitted", fps);
   cmd.AddValue ("motion", "Motion level (low/mixed/high)", motion);
+  cmd.AddValue ("bhiConfig", "BHI optimization (default/optimized)", bhiConfig);
+  cmd.AddValue ("dtibf", "DTI Beamforming (true/false)", dtibf);
 
 
   cmd.Parse (argc, argv);
   directory = "output/bf_" + beamforming + "_" + prediction + "_tx_" + txSize + "_rx_" + rxSize
-              + "_fps_" + to_string(fps) + "_data_" + dataRate + "_motion_" + motion + "/";
+              + "_fps_" + to_string(fps) + "_data_" + dataRate + "_motion_" + motion
+              + "_bhi_" + bhiConfig + "_dtibf_" + to_string(dtibf) + "/";
   SystemPath::MakeDirectories(directory);
   tputfile = std::ofstream(directory + "throughput");
   auto standard = WIFI_PHY_STANDARD_80211ay;
@@ -407,8 +436,8 @@ main (int argc, char *argv[])
   spectrumWifiPhy.SetErrorRateModel ("ns3::DmgErrorModel",
                                     "FileName", StringValue ("WigigFiles/ErrorModel/LookupTable_1458_ay.txt"));
   /* Set default algorithm for all nodes to be constant rate */
-  wifi.SetRemoteStationManager ("ns3::CbtraaDmgWifiManager");//, "DataMode", StringValue (phyMode));
-//  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (phyMode));
+//  wifi.SetRemoteStationManager ("ns3::CbtraaDmgWifiManager");//, "DataMode", StringValue (phyMode));
+  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (phyMode));
   /* Make four nodes and set them up with the phy and the mac */
   NodeContainer wifiNodes;
   wifiNodes.Create (2);
@@ -424,8 +453,9 @@ main (int argc, char *argv[])
                    "Ssid", SsidValue (ssid),
                    "BE_MaxAmpduSize", StringValue (mpduAggSize),
                    "BE_MaxAmsduSize", StringValue (msduAggSize),
-                   "SSSlotsPerABFT", UintegerValue (8), "SSFramesPerSlot", UintegerValue (13),
-                   "BeaconInterval", TimeValue (MicroSeconds (102400)),
+                   "SSSlotsPerABFT", UintegerValue (bhiConfig == "optimized" ? 8 : 8),
+                  "SSFramesPerSlot", UintegerValue (16),
+                   "BeaconInterval", TimeValue (MicroSeconds (bhiConfig == "optimized" ? 1024000 : 102400)),
                   "EDMGSupported", BooleanValue (true)
                    //"IsResponderTXSS", BooleanValue(false)
                   );
@@ -554,8 +584,13 @@ main (int argc, char *argv[])
 
   /* DMG AP Straces */
   slsTracerHelper->ConnectTrace (apWifiMac);
-  apWifiMac->TraceConnectWithoutContext ("DTIStarted", MakeBoundCallback (&DataTransmissionIntervalStarted,
-                                                                          apWifiMac, staWifiMac));
+  if (dtibf) {
+      apWifiMac->TraceConnectWithoutContext("DTIStarted", MakeBoundCallback(&DataTransmissionIntervalStarted,
+                                                                            apWifiMac, staWifiMac));
+  } else {
+      apWifiMac->TraceConnectWithoutContext("BTIStarted", MakeBoundCallback(&BeaconHeaderIntervalStarted,
+                                                                            apWifiMac, staWifiMac));
+  }
   apWifiMac->TraceConnectWithoutContext ("SLSCompleted", MakeBoundCallback (&SLSCompleted, apWifiMac));
   apWifiPhy->TraceConnectWithoutContext ("PhyTxEnd", MakeCallback (&PhyTxEnd));
   apRemoteStationManager->TraceConnectWithoutContext ("MacTxDataFailed", MakeCallback (&MacTxDataFailed));

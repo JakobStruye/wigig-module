@@ -874,6 +874,8 @@ public:
   Ptr<EDMGGroupIDSetElement> GetEdmgGroupIdSetElement (void) const;
   //// NINA ////
 
+  void clearSnrMap(Mac48Address peerAddress);
+
 protected:
   friend class MacLow;
   friend class DmgStaWifiMac;

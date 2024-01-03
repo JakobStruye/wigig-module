@@ -237,6 +237,9 @@ public:
 
   void hijackTx(Mac48Address addr, WeightsVector& wv);
 
+  void RequestRetrain (void) ;
+
+
 protected:
   friend class MultiBandNetDevice;
 

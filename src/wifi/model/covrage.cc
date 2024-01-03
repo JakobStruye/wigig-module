@@ -407,7 +407,6 @@ namespace ns3 {
             }
             rotPredFile.open(rotPredFilename.c_str(), std::ifstream::in);
             m_poseVecs.push_back(PoseVec());
-            m_rotPreds.push_back(Eulers());
             std::string val;
             bool isFirst = true;
             Euler firstRot;

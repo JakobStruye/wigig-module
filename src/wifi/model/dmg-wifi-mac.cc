@@ -4213,6 +4213,11 @@ DmgWifiMac::GetEdmgGroupIdSetElement (void) const
 }
 
 void
+DmgWifiMac::clearSnrMap(Mac48Address peerAddress) {
+  m_stationSnrMap.erase(peerAddress);
+}
+
+void
 DmgWifiMac::StartMuMimoBfTrainingSubphase (void)
 {
   NS_LOG_FUNCTION (this);

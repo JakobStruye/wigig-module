@@ -321,6 +321,13 @@ DmgStaWifiMac::hijackTx(Mac48Address addr, WeightsVector& wv) {
 }
 
 void
+DmgStaWifiMac::RequestRetrain (void)
+{
+    m_abftState = WAIT_BEAMFORMING_TRAINING;
+}
+
+
+void
 DmgStaWifiMac::SetActiveProbing (bool enable)
 {
   NS_LOG_FUNCTION (this << enable);
@@ -1073,7 +1080,8 @@ DmgStaWifiMac::DoAssociationBeamformingTraining (uint8_t currentSlotIndex)
       uint8_t slotIndex;  /* The index of the selected slot in the A-BFT period. */
       /* Choose a random SSW Slot to transmit SSW Frames in it */
       m_abftSlot->SetAttribute ("Min", DoubleValue (0));
-      m_abftSlot->SetAttribute ("Max", DoubleValue (m_remainingSlotsPerABFT - 1));
+      //HACK JAKOB -3 instead of -1 to ensure it doesnt overflow into DTI
+      m_abftSlot->SetAttribute ("Max", DoubleValue (m_remainingSlotsPerABFT - 3));
       slotIndex = m_abftSlot->GetInteger ();
       NS_LOG_DEBUG ("Local Slot Index=" << uint16_t (slotIndex) <<
                     ", Remaining Slots in the current A-BFT=" << uint16_t (m_remainingSlotsPerABFT));

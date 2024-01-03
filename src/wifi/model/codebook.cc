@@ -556,6 +556,7 @@ Codebook::GetNextSector (bool &changeAntenna)
   NS_LOG_DEBUG ("Remaining Sectors=" << static_cast<uint16_t> (m_remainingSectors));
   if (m_remainingSectors == 0)
     {
+//      m_beamformingSectorList = m_bhiAntennaI->second; //JAKOB fix for dti beamforming enabling all sectors in BTI
       changeAntenna = false;
       return false;
     }
@@ -1551,6 +1552,8 @@ Codebook::DisableTx() {
   m_totalTxSectors = 1;
   m_rxBeamformingSectors[1].erase(m_rxBeamformingSectors[1].begin()+1, m_rxBeamformingSectors[1].end());
   m_totalRxSectors = 1;
+  m_bhiAntennaList[1].erase(m_bhiAntennaList[1].begin()+1, m_bhiAntennaList[1].end());
+  m_totalSectors = 1;
 }
 
 }

@@ -1,9 +1,14 @@
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
+
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
 labels=["CoVRage", "Big QO", "Big QO (az only)", "Small QO", "Small QO (az only)", "Small sectors"]
-label_idx = 0
-thresh = 0.85
+labels=["CoVRage (on-device pred.)", "CoVRage (model-basec pred.)", "CoVRage (oracle)", "Quasi-Omni", "Quasi-Omni (small array)", "Sector-based"]
+trace_idx = 0
+thresh = 1
+title="No timeout, loss threshold 1.0"
 for filename in sys.argv[1:]:
   with open(filename, "r") as f:
     lines = f.readlines()
@@ -16,15 +21,23 @@ for filename in sys.argv[1:]:
     delaysU, counts = np.unique(delays, return_counts=True)
     print("LEN", len(delaysU), len(delays), max(frac_per_frame), max(frac_per_frame) >= thresh)
     counts = np.cumsum(counts, dtype=float)
-    counts /= counts[-1]
-    rcvdfrac = good / (good+bad)
+    good_with_thresh = counts[-1]
+    counts /= good_with_thresh
+    rcvdfrac = good_with_thresh / (good+bad)
     counts *= rcvdfrac
-    plt.plot(delaysU, counts, label=labels[label_idx])
-    label_idx+=1
+    plt.plot(delaysU, counts, label=labels[trace_idx], color=colors[trace_idx])
+    if delaysU[-1] > 20:
+      idx_pos = (np.abs(delaysU - 19)).argmin()
+      idx_val = (np.abs(delaysU - 20)).argmin()
+      plt.text(18, counts[idx_pos]-0.01, "{:.2f}%".format(100.0*counts[idx_val]), color=colors[trace_idx],
+               backgroundcolor="white", fontsize=8, zorder=10,
+               bbox=dict(facecolor="white", edgecolor='none', boxstyle='round', pad=0.1))
+    trace_idx+=1
     print(good,bad)
 plt.ylim(-0.05, 1.05)
+plt.xlim(0,20)
 plt.xlabel("Video frame delay (ms)")
 plt.ylabel("CDF")
 plt.legend()
 plt.show()
-    
+# plt.savefig("cdf.png")
