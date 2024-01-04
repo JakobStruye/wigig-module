@@ -33,12 +33,11 @@ for txSize in txSizes:
            continue
           counter += 1
           print(counter)
-          continue
           command = ('./waf --run "evaluate_qd_channel_lroom_scenario --txSize='+txSize +
                      ' --rxSize='+rxSize + ' --beamforming='+beamforming +
                      ' --fps='+str(fps) + ' --dataRate='+dataRate + ' --prediction='+prediction +
                      ' --motion='+motion + ' --bhiConfig='+bhiConfig + ' --dtibf='+dtibf +
-                     ' --covrageInterval'+covrageInterval
+                     ' --covrageInterval='+str(covrageInterval)
                      +'"')
           command += "&"
           os.system(command)
@@ -46,6 +45,6 @@ for txSize in txSizes:
           while True:
             result = subprocess.check_output('ps aux | grep evaluate_qd_channel_lroom_scenario | wc -l ', shell=True, text=True)
             running = (int(result) -2)/2
-            if (running < 4):
+            if (running < 1):
                 break
 
