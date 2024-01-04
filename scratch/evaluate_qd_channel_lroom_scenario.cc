@@ -103,6 +103,8 @@ bool csv = false;                         /* Enable CSV output. */
 Ptr<QdPropagationEngine> qdPropagationEngine; /* Q-D Propagation Engine. */
 CoVRage* covrage;
 bool covrageRunning = false;
+bool doDelayedCovrage = false;
+int covrageInterval = 0;
 
 std::map<Time, uint> pktsPerBurstRcvd;
 std::map<Time, Time> latestPerBurstRcvd;
@@ -201,22 +203,41 @@ StationAssoicated (Ptr<DmgWifiMac> staWifiMac, Mac48Address address, uint16_t ai
 }
 
 void
-DataTransmissionIntervalStarted (Ptr<DmgApWifiMac> apWifiMac, Ptr<DmgStaWifiMac> staWifiMac, Mac48Address address, Time)
+DoDTICoVRage()
 {
-  if (apWifiMac->GetWifiRemoteStationManager ()->IsAssociated (staWifiMac->GetAddress ()) > 0)
+    if (apWifiMac->GetWifiRemoteStationManager ()->IsAssociated (staWifiMac->GetAddress ()) > 0)
     {
-      biCounter++;
-      if (biCounter == biThreshold)
+        biCounter++;
+        if (biCounter == biThreshold)
         {
-          if (beamforming != "sectors") {
-              Ptr<Codebook> cb = staWifiMac->GetCodebook();
-              cb->DisableTx();
-          }
-          apWifiMac->Perform_TXSS_TXOP (staWifiMac->GetAddress());
-          DoCovrage();
-          biCounter = 0;
+            if (beamforming != "sectors") {
+                Ptr<Codebook> cb = staWifiMac->GetCodebook();
+                cb->DisableTx();
+            }
+            apWifiMac->Perform_TXSS_TXOP (staWifiMac->GetAddress());
+            DoCovrage();
+            biCounter = 0;
         }
     }
+}
+void
+ScheduleDTICoVRage()
+{
+    if (apWifiMac->GetDTIRemainingTime() > MilliSeconds(5)) {
+        DoDTICoVRage();
+    } else {
+        doDelayedCovrage = true;
+    }
+    Simulator::Schedule (MilliSeconds (covrageInterval), &ScheduleDTICoVRage);
+}
+
+void
+DataTransmissionIntervalStarted (Ptr<DmgApWifiMac> apWifiMac, Ptr<DmgStaWifiMac> staWifiMac, Mac48Address address, Time)
+{
+  if (doDelayedCovrage || (covrageInterval == 0)) {
+      DoDTICoVRage();
+      doDelayedCovrage = false;
+  }
 }
 
 void
@@ -360,12 +381,15 @@ main (int argc, char *argv[])
   cmd.AddValue ("motion", "Motion level (low/mixed/high)", motion);
   cmd.AddValue ("bhiConfig", "BHI optimization (default/optimized)", bhiConfig);
   cmd.AddValue ("dtibf", "DTI Beamforming (true/false)", dtibf);
+  cmd.AddValue ("covrageInterval", "Time between covrage runs in milliseconds, only with dti bf", covrageInterval);
 
 
   cmd.Parse (argc, argv);
   directory = "output/bf_" + beamforming + "_" + prediction + "_tx_" + txSize + "_rx_" + rxSize
               + "_fps_" + to_string(fps) + "_data_" + dataRate + "_motion_" + motion
-              + "_bhi_" + bhiConfig + "_dtibf_" + to_string(dtibf) + "/";
+              + "_bhi_" + bhiConfig + "_dtibf_" + to_string(dtibf)
+              + (dtibf ? ("_cvrInterval_" + to_string(covrageInterval)) : "")
+              + "/";
   SystemPath::MakeDirectories(directory);
   tputfile = std::ofstream(directory + "throughput");
   auto standard = WIFI_PHY_STANDARD_80211ay;
@@ -479,7 +503,7 @@ main (int argc, char *argv[])
   /* Set Parametric Codebook for the DMG STA */
 //  wifi.SetCodebook ("ns3::CodebookParametric",
 //                    "FileName", StringValue ("WigigFiles/Codebook/CODEBOOK_URA_STA_" + arrayConfig + "x.txt"));
-    wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam" + rxSize));
+  wifi.SetCodebook ("ns3::CodebookParametric","FileName", StringValue ("../802.11ad-codebook-generator-ns3/codebookParam" + rxSize));
 
 
   staDevices = wifi.Install (spectrumWifiPhy, wifiMac, staWifiNode);
@@ -587,6 +611,9 @@ main (int argc, char *argv[])
   if (dtibf) {
       apWifiMac->TraceConnectWithoutContext("DTIStarted", MakeBoundCallback(&DataTransmissionIntervalStarted,
                                                                             apWifiMac, staWifiMac));
+      if (covrageInterval > 0) {
+          Simulator::Schedule(MilliSeconds(100), &ScheduleDTICoVRage);
+      }
   } else {
       apWifiMac->TraceConnectWithoutContext("BTIStarted", MakeBoundCallback(&BeaconHeaderIntervalStarted,
                                                                             apWifiMac, staWifiMac));
