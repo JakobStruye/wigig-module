@@ -42,9 +42,16 @@ for txSize in txSizes:
           command += "&"
           os.system(command)
           time.sleep(5)
+          onegood = False
           while True:
-            result = subprocess.check_output('ps aux | grep evaluate_qd_channel_lroom_scenario | wc -l ', shell=True, text=True)
-            running = (int(result) -2)/2
-            if (running < 1):
-                break
+           time.sleep(1)
+           result = subprocess.check_output('ps aux | grep evaluate_qd_channel_lroom_scenario | wc -l ', shell=True, text=True)
+           running = (int(result) -2)/2
+           if running < 2:
+            if not onegood:
+             onegood = True
+            else:
+             break
+           else:
+            onegood = False
 
