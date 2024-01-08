@@ -353,6 +353,9 @@ private:
    */
   inline void NormalizeWeights (WeightsVector &weightsVector);
 
+  void SteerVecToFile(Ptr<ParametricAntennaConfig> antennaConfig);
+  void SteerVecFromFile(Ptr<ParametricAntennaConfig> antennaConfig);
+
 private:
   bool m_precalculatedPatterns;   //!< Flag to indicate whether we have precalculated the array pattern.
   bool m_cloned;                  //!< Flag to indicate if we have cloned this codebook.

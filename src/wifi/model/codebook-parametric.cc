@@ -298,6 +298,66 @@ CodebookParametric::NormalizeWeights (WeightsVector &weightsVector)
     }
 }
 
+void
+CodebookParametric::SteerVecToFile(Ptr<ParametricAntennaConfig> antennaConfig) {
+    std::ofstream outFile("steervec", std::ios::binary);
+    if (!outFile.is_open()) {
+        std::cerr << "Error opening file for writing." << std::endl;
+        return;
+    }
+
+//    // Write dimensions of the array
+//    outFile.write(reinterpret_cast<const char*>(&AZIMUTH_CARDINALITY), sizeof(int));
+//    outFile.write(reinterpret_cast<const char*>(&ELEVATION_CARDINALITY), sizeof(int));
+//    outFile.write(reinterpret_cast<const char*>(&m_antennaArrayList[1]->numElements), sizeof(int));
+
+    // Write complex values
+    for (int m = 0; m < AZIMUTH_CARDINALITY; ++m) {
+        for (int n = 0; n < ELEVATION_CARDINALITY; ++n) {
+            for (int e = 0; e < antennaConfig->numElements; ++e) {
+                outFile.write(reinterpret_cast<const char*>(&antennaConfig->steeringVector[m][n][e]), sizeof(Complex));
+            }
+        }
+    }
+
+    outFile.close();
+}
+
+void
+CodebookParametric::SteerVecFromFile(Ptr<ParametricAntennaConfig> antennaConfig) {
+    std::ifstream inFile("steervec", std::ios::binary);
+    if (!inFile.is_open()) {
+        std::cerr << "Error opening file for reading." << std::endl;
+        return;
+    }
+
+//    // Read dimensions of the array
+//    inFile.read(reinterpret_cast<char*>(&AZIMUTH_CARDINALITY), sizeof(int));
+//    inFile.read(reinterpret_cast<char*>(&ELEVATION_CARDINALITY), sizeof(int));
+//    inFile.read(reinterpret_cast<char*>(&cols), sizeof(int));
+
+//    // Allocate memory for the array
+//    array = new Complex**[AZIMUTH_CARDINALITY];
+//    for (int d = 0; d < AZIMUTH_CARDINALITY; ++d) {
+//        array[d] = new Complex*[ELEVATION_CARDINALITY];
+//        for (int i = 0; i < ELEVATION_CARDINALITY; ++i) {
+//            array[d][i] = new Complex[cols];
+//        }
+//    }
+
+    // Read complex values
+    for (int d = 0; d < AZIMUTH_CARDINALITY; ++d) {
+        for (int i = 0; i < ELEVATION_CARDINALITY; ++i) {
+            for (int j = 0; j < antennaConfig->numElements; ++j) {
+                inFile.read(reinterpret_cast<char*>(&antennaConfig->steeringVector[d][i][j]), sizeof(Complex));
+            }
+        }
+    }
+
+    inFile.close();
+}
+
+
 WeightsVector
 CodebookParametric::ReadAntennaWeightsVector (std::ifstream &file, uint16_t elements)
 {
@@ -420,21 +480,27 @@ CodebookParametric::LoadCodebook (std::string filename)
         }
 
       /* Read the 3D steering vector of the antenna array */
-      for (uint16_t l = 0; l < antennaConfig->numElements; l++)
-        {
-          for (uint16_t m = 0; m < AZIMUTH_CARDINALITY; m++)
-            {
-              std::getline (file, line);
-              std::istringstream split (line);
-              for (uint16_t n = 0; n < ELEVATION_CARDINALITY; n++)
-                {
-                  std::getline (split, amp, ',');
-                  std::getline (split, phaseDelay, ',');
-                  antennaConfig->steeringVector[m][n][l] = std::polar (std::stod (amp), std::stod (phaseDelay));
-                }
-            }
-        }
-
+      if (filename == "../802.11ad-codebook-generator-ns3/codebookParamBig") {
+          SteerVecFromFile(antennaConfig);
+          for (int dummy = 0; dummy < antennaConfig->numElements * AZIMUTH_CARDINALITY; dummy++) {
+              std::getline(file, line);
+          }
+      } else {
+          for (uint16_t l = 0; l < antennaConfig->numElements; l++) {
+              for (uint16_t m = 0; m < AZIMUTH_CARDINALITY; m++) {
+                  std::getline(file, line);
+                  std::istringstream split(line);
+                  for (uint16_t n = 0; n < ELEVATION_CARDINALITY; n++) {
+                      std::getline(split, amp, ',');
+                      std::getline(split, phaseDelay, ',');
+                      antennaConfig->steeringVector[m][n][l] = std::polar(std::stod(amp), std::stod(phaseDelay));
+                  }
+              }
+          }
+      }
+//      std::cout << "writing" << std::endl;
+//      SteerVecToFile(antennaConfig);
+//      std::cout << "written" << std::endl;
       /* Read Quasi-omni antenna weights and calculate its directivity */
       Ptr<ParametricPatternConfig> quasiOmni = Create<ParametricPatternConfig> ();
       quasiOmni->SetWeights (ReadAntennaWeightsVector (file, antennaConfig->numElements));
