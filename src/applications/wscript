@@ -20,7 +20,12 @@ def build(bld):
         'model/three-gpp-http-client.cc',
         'model/three-gpp-http-server.cc',
         'model/three-gpp-http-header.cc',
-        'model/three-gpp-http-variables.cc', 
+        'model/three-gpp-http-variables.cc',
+        'model/burst-generator.cc',
+        'model/burst-sink.cc',
+        'model/bursty-application.cc',
+        'model/seq-ts-size-frag-header.cc',
+        'model/simple-burst-generator.cc',
         'helper/bulk-send-helper.cc',
         'helper/on-off-helper.cc',
         'helper/burst-helper.cc',
@@ -28,6 +33,8 @@ def build(bld):
         'helper/udp-client-server-helper.cc',
         'helper/udp-echo-helper.cc',
         'helper/three-gpp-http-helper.cc',
+        'helper/burst-sink-helper.cc',
+        'helper/bursty-helper.cc',
         ]
 
     applications_test = bld.create_ns3_module_test_library('applications')
@@ -57,13 +64,20 @@ def build(bld):
         'model/three-gpp-http-server.h',
         'model/three-gpp-http-header.h',
         'model/three-gpp-http-variables.h',
+        'model/burst-generator.h',
+        'model/burst-sink.h',
+        'model/bursty-application.h',
+        'model/seq-ts-size-frag-header.h',
+        'model/simple-burst-generator.h',
         'helper/bulk-send-helper.h',
         'helper/on-off-helper.h',
         'helper/burst-helper.h',
         'helper/packet-sink-helper.h',
         'helper/udp-client-server-helper.h',
         'helper/udp-echo-helper.h',
-        'helper/three-gpp-http-helper.h'
+        'helper/three-gpp-http-helper.h',
+        'helper/burst-sink-helper.h',
+        'helper/bursty-helper.h',
         ]
     
     if (bld.env['ENABLE_EXAMPLES']):

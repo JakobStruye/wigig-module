@@ -18,6 +18,10 @@
 
 #include <iomanip>
 #include <sstream>
+
+#include "ns3/burst-sink-helper.h"
+#include "ns3/bursty-helper.h"
+#include "ns3/simple-burst-generator.h"
 /**
  * Simulation Objective:
  * This script is used to evaluate the performance and behaviour of the IEEE 802.11ad standard in
@@ -71,8 +75,8 @@ using namespace std;
 string applicationType = "onoff";          /* Type of the Tx application */
 uint64_t totalRx = 0;
 double throughput = 0;
-Ptr<PacketSink> packetSink;
-Ptr<BurstApplication> onoff;
+Ptr<BurstSink> packetSink;
+Ptr<BurstyApplication> onoff;
 Ptr<BulkSendApplication> bulk;
 
 /* Network Nodes */
@@ -118,11 +122,19 @@ bool dtibf = true;
 
 std::ofstream tputfile;
 
+double
+CalculateSingleStreamThroughputBurst (Ptr<BurstSink> sink, uint64_t &lastTotalRx, double &averageThroughput)
+{
+    double thr = (sink->GetTotalRxBytes() - lastTotalRx) * (double) 8/1e5;     /* Convert Application RX Packets to MBits. */
+    lastTotalRx = sink->GetTotalRxBytes ();
+    averageThroughput += thr;
+    return thr;
+}
 
 void
 CalculateThroughput (void)
 {
-  double thr = CalculateSingleStreamThroughput (packetSink, totalRx, throughput);
+  double thr = CalculateSingleStreamThroughputBurst (packetSink, totalRx, throughput);
 //  thr *= 10;
   if (!csv)
     {
@@ -306,7 +318,7 @@ tagMade (const TimestampTag& tag) {
 }
 
 void
-pktReceived (Ptr<BurstApplication> sender, const Ptr<const Packet> pkt, const Address &)
+pktReceived (Ptr<BurstyApplication> sender, const Ptr<const Packet> pkt, const Address &, const Address &, const SeqTsSizeFragHeader &)
 {
   TimestampTag tag;
   pkt->FindFirstMatchingByteTag(tag);
@@ -550,9 +562,9 @@ main (int argc, char *argv[])
   if (activateApp)
     {
       /* Install Simple UDP Server on the DMG AP */
-      PacketSinkHelper sinkHelper (socketType, InetSocketAddress (Ipv4Address::GetAny (), 9999));
+      BurstSinkHelper sinkHelper (socketType, InetSocketAddress (Ipv4Address::GetAny (), 9999));
       ApplicationContainer sinkApp = sinkHelper.Install (staWifiNode);
-      packetSink = StaticCast<PacketSink> (sinkApp.Get (0));
+      packetSink = StaticCast<BurstSink> (sinkApp.Get (0));
       sinkApp.Start (Seconds (0.0));
 
       /* Install TCP/UDP Transmitter on the DMG STA */
@@ -560,17 +572,17 @@ main (int argc, char *argv[])
       ApplicationContainer srcApp;
       if (applicationType == "onoff")
         {
-          BurstHelper src (socketType, dest);
-          src.SetAttribute ("MaxPackets", UintegerValue (maxPackets));
-          src.SetAttribute ("PacketSize", UintegerValue (packetSize));
-          src.SetAttribute ("BurstsPerSecond", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(fps) + "]"));
-//          src.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
-          src.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
+          BurstyHelper src (socketType, dest);
+          src.SetAttribute ("FragmentSize", UintegerValue (packetSize));
+          src.SetBurstGenerator ("ns3::SimpleBurstGenerator",
+                                         "PeriodRv", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(1.0/fps) + "]"),
+                                         "BurstSizeRv", StringValue ("ns3::ConstantRandomVariable[Constant="
+                                                           + std::to_string(std::stoi(dataRate.substr(0, dataRate.length() - 4)) * 1000000.0 / 8 / fps) + "]"));
           src.SetAttribute("EnableTimestamp", BooleanValue(true));
           srcApp = src.Install (apWifiNode);
-          onoff = StaticCast<BurstApplication> (srcApp.Get (0));
+          onoff = StaticCast<BurstyApplication> (srcApp.Get (0));
           onoff->TraceConnectWithoutContext("TagCreated", MakeCallback(&tagMade));
-          packetSink->TraceConnectWithoutContext ("Rx", MakeBoundCallback(&pktReceived, onoff));
+          packetSink->TraceConnectWithoutContext ("FragmentRx", MakeBoundCallback(&pktReceived, onoff));
 
         }
       else if (applicationType == "bulk")
@@ -678,7 +690,7 @@ main (int argc, char *argv[])
           std::cout << "\nApplication Layer Statistics:" << std::endl;;
           if (applicationType == "onoff")
             {
-              std::cout << "  Tx Packets: " << onoff->GetTotalTxPackets () << std::endl;
+              std::cout << "  Tx Packets: " << onoff->GetTotalTxFragments () << std::endl;
               std::cout << "  Tx Bytes:   " << onoff->GetTotalTxBytes () << std::endl;
             }
           else
@@ -695,12 +707,12 @@ main (int argc, char *argv[])
               if (Seconds(simulationTime) - it->first < Seconds(0.1)) {
                   //ignore
                   continue;
-              } else if (it->second < onoff->GetPktsPerBurst()) {
+              } else if (it->second < onoff->GetFragmentsPerBurst()) {
                   bad += 1;
               } else {
                   good += 1;
               }
-              usDelays.push_back({(latestPerBurstRcvd[it->first] - it->first).GetMicroSeconds(), it->second / (double)onoff->GetPktsPerBurst()});
+              usDelays.push_back({(latestPerBurstRcvd[it->first] - it->first).GetMicroSeconds(), it->second / (double)onoff->GetFragmentsPerBurst()});
 
             }
             std::sort(usDelays.begin(), usDelays.end());
@@ -712,9 +724,9 @@ main (int argc, char *argv[])
         }
 
 
-      std::cout << "  Rx Packets: " << packetSink->GetTotalReceivedPackets () << std::endl;
-      std::cout << "  Rx Bytes:   " << packetSink->GetTotalRx () << std::endl;
-      std::cout << "  Throughput: " << packetSink->GetTotalRx () * 8.0 / (simulationTime * 1e6) << " Mbps" << std::endl;
+      std::cout << "  Rx Packets: " << packetSink->GetTotalRxFragments () << std::endl;
+      std::cout << "  Rx Bytes:   " << packetSink->GetTotalRxBytes () << std::endl;
+      std::cout << "  Throughput: " << packetSink->GetTotalRxBytes () * 8.0 / (simulationTime * 1e6) << " Mbps" << std::endl;
 
       /* Print MAC Layer Statistics */
       std::cout << "\nMAC Layer Statistics:" << std::endl;;
@@ -735,6 +747,6 @@ main (int argc, char *argv[])
   Simulator::Destroy ();
   tputfile.close();
   outfile.close();
-
+  std::quick_exit(0); //avoid destruction hang
   return 0;
 }

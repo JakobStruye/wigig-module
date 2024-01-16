@@ -55,3 +55,17 @@ for txSize in txSizes:
            else:
             onegood = False
 
+
+onegood = False
+while True:
+ time.sleep(1)
+ result = subprocess.check_output('ps aux | grep evaluate_qd_channel_lroom_scenario | wc -l ', shell=True, text=True)
+ running = (int(result) -2)/2
+ if running == 0:
+  if not onegood:
+   onegood = True
+  else:
+   break
+ else:
+  onegood = False
+
